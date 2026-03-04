@@ -617,4 +617,3 @@ class Search(Resource):
 
         return {"doctors": doctors, "patients": patients}, 200
 api.add_resource(Search, "/search")
-
