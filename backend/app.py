@@ -14,7 +14,17 @@ def create_app():
     return app
 # seperate python file for creating models
 app = create_app()
-CORS(app, origins=["http://localhost:5173"])
+# the frontend dev server may run on localhost:5173 or 127.0.0.1:5174 (Vite defaults to 5173),but if it is used by another terminal then it will run on 5174 or 5170
+
+CORS(app, resources={r"/*": {"origins": [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://localhost:5174",
+    "http://127.0.0.1:5174",
+    "http://localhost:5170",
+    "http://127.0.0.1:5170",
+    "*"
+]}}, supports_credentials=True)
 models.db.init_app(app)
 jwt = JWTManager(app)
 from routes import api
