@@ -1,9 +1,23 @@
 from flask import Flask, render_template, request, redirect, session, flash, url_for
 from flask_sqlalchemy import SQLAlchemy
 import sqlalchemy
+from datetime import datetime, time
 
 db = SQLAlchemy()
 
+SLOT_TIME_OBJECTS = {
+    "09:00": time(9, 0),
+    "10:00": time(10, 0),
+    "11:00": time(11, 0),
+    "12:00": time(12, 0),
+    "16:00": time(16, 0),
+    "17:00": time(17, 0),
+    "18:00": time(18, 0),
+    "19:00": time(19, 0),
+    "20:00": time(20, 0),
+    "21:00": time(21, 0),
+    "22:00": time(22, 0),
+}
 # ---------------- MODELS ----------------
 
 class User(db.Model):

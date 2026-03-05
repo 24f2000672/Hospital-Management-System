@@ -16,5 +16,10 @@
             <p>You can update your profile information and change your password here.</p>
             <button class="btn btn-primary" @click="goToProfile">Go to Profile</button>
         </div>
+        <div class="dashboard-section mt-4">
+            <h2>Medical History</h2>
+            <p>You can view your medical history here.</p>
+            <button class="btn btn-secondary" @click="goToHistory">View History</button>
+        </div>  
     </main>
 </template>
