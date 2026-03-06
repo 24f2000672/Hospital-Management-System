@@ -200,18 +200,6 @@ class PatientDashboard(Resource):
             "departments": departments_list
         }, 200
 
-
-from flask_restful import Resource
-from flask_jwt_extended import jwt_required, get_jwt_identity
-from flask import jsonify
-from datetime import date, timedelta
-from models import db, Doctor, Appointment, Patient
-
-from flask_restful import Resource
-from flask_jwt_extended import jwt_required, get_jwt_identity
-from datetime import date, timedelta
-from models import db, Doctor, Patient, Appointment
-
 class DoctorDashboard(Resource):
 
     @jwt_required()
