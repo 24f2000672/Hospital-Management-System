@@ -3,37 +3,9 @@ from flask import request
 from flask_restful import Api, Resource
 from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity
 from sqlalchemy import distinct
-from models import User, db, Patient, Doctor, Department, Appointment, Treatment
+from models import User, db, Patient, Doctor, Department, Appointment, Treatment,SLOT_LABELS ,SLOT_TIME_OBJECTS
 
 api = Api()
-
-SLOT_TIME_OBJECTS = {
-    "09:00": time(9, 0),
-    "10:00": time(10, 0),
-    "11:00": time(11, 0),
-    "12:00": time(12, 0),
-    "16:00": time(16, 0),
-    "17:00": time(17, 0),
-    "18:00": time(18, 0),
-    "19:00": time(19, 0),
-    "20:00": time(20, 0),
-    "21:00": time(21, 0),
-    "22:00": time(22, 0),
-}
-
-SLOT_LABELS = {
-    "09:00": "09:00 AM",
-    "10:00": "10:00 AM",
-    "11:00": "11:00 AM",
-    "12:00": "12:00 PM",
-    "16:00": "04:00 PM",
-    "17:00": "05:00 PM",
-    "18:00": "06:00 PM",
-    "19:00": "07:00 PM",
-    "20:00": "08:00 PM",
-    "21:00": "09:00 PM",
-    "22:00": "10:00 PM",
-}
 
 #login and signup routes
 class Login(Resource):
@@ -52,14 +24,18 @@ class Login(Resource):
         if user.password != password:
             return {"message": "Incorrect password"}, 401
 
+        # Create JWT token
         access_token = create_access_token(identity=user.email)
 
-        if user.role == 1:
+        # Role-based dashboard mapping
+        if user.role == 1:        # Admin
             dashboard = "/admin/dashboard"
-        elif user.role == 2:
+        elif user.role == 2:      # Doctor
             dashboard = "/doctor/dashboard"
-        else:
+        elif user.role == 3:      # Patient
             dashboard = "/patient/dashboard"
+        else:
+            dashboard = "/login"   # fallback
 
         return {
             "message": "Login Successful",
@@ -67,7 +43,6 @@ class Login(Resource):
             "redirect_to": dashboard,
             "access_token": access_token
         }, 200
-
 
 class Signup(Resource):
     def post(self):
@@ -226,104 +201,122 @@ class PatientDashboard(Resource):
         }, 200
 
 
+from flask_restful import Resource
+from flask_jwt_extended import jwt_required, get_jwt_identity
+from flask import jsonify
+from datetime import date, timedelta
+from models import db, Doctor, Appointment, Patient
+
+from flask_restful import Resource
+from flask_jwt_extended import jwt_required, get_jwt_identity
+from datetime import date, timedelta
+from models import db, Doctor, Patient, Appointment
+
 class DoctorDashboard(Resource):
 
     @jwt_required()
     def get(self):
+        try:
+            email = get_jwt_identity()
 
-        email = get_jwt_identity()
+            doctor = Doctor.query.filter_by(email=email).first()
+            if not doctor:
+                return {"message": "Doctor not found"}, 404
 
-        doctor = Doctor.query.filter_by(email=email).first()
+            doc_id = doctor.id
+            today = date.today()
+            tomorrow = today + timedelta(days=1)
+            next_week = today + timedelta(days=7)
 
-        if not doctor:
-            return {"message": "Doctor not found"}, 404
-
-        doc_id = doctor.id
-        today = date.today()
-        tomorrow = today + timedelta(days=1)
-        next_week = today + timedelta(days=7)
-
-        todays_query = (
-            db.session.query(Appointment, Patient)
-            .join(Patient)
-            .filter(
-                Appointment.doctor_id == doc_id,
-                Appointment.Status == "Booked",
-                Appointment.date == today
+            # Today's appointments
+            todays_query = (
+                db.session.query(Appointment, Patient)
+                .join(Patient, Appointment.patient_id == Patient.id)
+                .filter(
+                    Appointment.doctor_id == doc_id,
+                    Appointment.status.ilike("Booked"),   # <-- fixed lowercase
+                    Appointment.date == today
+                )
+                .order_by(Appointment.time)
+                .all()
             )
-            .order_by(Appointment.time)
-            .all()
-        )
 
-        todays = [{
-            "id": a.id,
-            "date": str(a.date),
-            "time": str(a.time),
-            "Status": a.Status,
-            "patient_name": f"{p.first_name} {p.last_name}"
-        } for a, p in todays_query]
+            todays = [{
+                "id": a.id,
+                "date": str(a.date),
+                "time": str(a.time),
+                "status": a.status,   # <-- lowercase
+                "patient_name": f"{p.first_name} {p.last_name}"
+            } for a, p in todays_query]
 
-        upcoming_query = (
-            db.session.query(Appointment, Patient)
-            .join(Patient)
-            .filter(
-                Appointment.doctor_id == doc_id,
-                Appointment.Status == "Booked",
-                Appointment.date >= tomorrow,
-                Appointment.date <= next_week
+            # Upcoming appointments (next 7 days)
+            upcoming_query = (
+                db.session.query(Appointment, Patient)
+                .join(Patient, Appointment.patient_id == Patient.id)
+                .filter(
+                    Appointment.doctor_id == doc_id,
+                    Appointment.status.ilike("Booked"),   # <-- lowercase
+                    Appointment.date >= tomorrow,
+                    Appointment.date <= next_week
+                )
+                .order_by(Appointment.date, Appointment.time)
+                .all()
             )
-            .order_by(Appointment.date, Appointment.time)
-            .all()
-        )
 
-        upcoming = [{
-            "id": a.id,
-            "date": str(a.date),
-            "time": str(a.time),
-            "Status": a.Status,
-            "patient_name": f"{p.first_name} {p.last_name}"
-        } for a, p in upcoming_query]
+            upcoming = [{
+                "id": a.id,
+                "date": str(a.date),
+                "time": str(a.time),
+                "status": a.status,   # <-- lowercase
+                "patient_name": f"{p.first_name} {p.last_name}"
+            } for a, p in upcoming_query]
 
-        past_query = (
-            db.session.query(Appointment, Patient)
-            .join(Patient)
-            .filter(
-                Appointment.doctor_id == doc_id,
-                Appointment.date < today
+            # Past appointments
+            past_query = (
+                db.session.query(Appointment, Patient)
+                .join(Patient, Appointment.patient_id == Patient.id)
+                .filter(
+                    Appointment.doctor_id == doc_id,
+                    Appointment.date < today
+                )
+                .order_by(Appointment.date.desc())
+                .all()
             )
-            .order_by(Appointment.date.desc())
-            .all()
-        )
 
-        past = [{
-            "id": a.id,
-            "date": str(a.date),
-            "time": str(a.time),
-            "Status": a.Status,
-            "patient_name": f"{p.first_name} {p.last_name}"
-        } for a, p in past_query]
+            past = [{
+                "id": a.id,
+                "date": str(a.date),
+                "time": str(a.time),
+                "status": a.status,  # <-- lowercase
+                "patient_name": f"{p.first_name} {p.last_name}"
+            } for a, p in past_query]
 
-        assigned_query = (
-            db.session.query(Patient)
-            .join(Appointment)
-            .filter(Appointment.doctor_id == doc_id)
-            .distinct()
-            .all()
-        )
+            # Assigned patients (distinct)
+            assigned_query = (
+                db.session.query(Patient)
+                .join(Appointment, Appointment.patient_id == Patient.id)
+                .filter(Appointment.doctor_id == doc_id)
+                .distinct()
+                .all()
+            )
 
-        patients = [{
-            "id": p.id,
-            "first_name": p.first_name,
-            "last_name": p.last_name,
-            "email": p.email
-        } for p in assigned_query]
+            patients = [{
+                "id": p.id,
+                "first_name": p.first_name,
+                "last_name": p.last_name,
+                "email": p.email
+            } for p in assigned_query]
 
-        return {
-            "todays": todays,
-            "upcoming": upcoming,
-            "past": past,
-            "patients": patients
-        }, 200
+            return {
+                "todays": todays,
+                "upcoming": upcoming,
+                "past": past,
+                "patients": patients
+            }, 200
+
+        except Exception as e:
+            print("DoctorDashboard error:", e)
+            return {"message": "Internal Server Error"}, 500
 
 api.add_resource(DoctorDashboard, "/doctor/dashboard")
 api.add_resource(AdminDashboard, "/admin/dashboard")
@@ -647,8 +640,8 @@ api.add_resource(Search, "/search")
 class editPatient(Resource):
     @jwt_required()
     def put(self, patient_id):
-        email = get_jwt_identity()
-        current_user = User.query.filter_by(email=email).first()
+        user_email = get_jwt_identity()
+        current_user = User.query.filter_by(email=user_email).first()
 
         if current_user.role != 1:
             return {"message": "Only admin can update patient"}, 403
@@ -662,183 +655,169 @@ class editPatient(Resource):
         patient.last_name = data.get("ln", patient.last_name)
         patient.age = data.get("age", patient.age)
         patient.phone = data.get("phone", patient.phone)
+
 class ManageSlots(Resource):
     @jwt_required()
     def get(self):
-
-        user_id = get_jwt_identity()
-
-        doctor = Doctor.query.filter_by(user_id=user_id).first()
-
-        if not doctor:
-            return {"message":"Doctor not found"},404
-
-        today = date.today()
-        now = datetime.now().time()
-
-        dates = [(today + timedelta(days=i)).isoformat() for i in range(7)]
-
-        slots = {}
-
-        for d in dates:
-
-            day_date = datetime.strptime(d,"%Y-%m-%d").date()
-
-            day_slots = []
-
-            for key,slot_time in SLOT_TIME_OBJECTS.items():
-
-                # remove past slots for today
-                if day_date == today and slot_time < now:
-                    continue
-
-                appt = Appointment.query.filter_by(
-                    doctor_id = doctor.id,
-                    Date = day_date,
-                    Time = slot_time
-                ).first()
-
-                if appt:
-
-                    if appt.patient_id:
-                        Status = "Booked"
-                    else:
-                        Status = "Available"
-
-                else:
-                    Status = "New"
-
-                day_slots.append({
-                    "time_key": key,
-                    "label": key,
-                    "Status": Status
-                })
-
-            slots[d] = day_slots
-
-        return {
-            "dates": dates,
-            "slots": slots
-        }
-
-    @jwt_required()
-    def post(self):
-
-        data = request.get_json()
-
-        slot_list = data.get("slots", [])
-
-        user_id = get_jwt_identity()
-
-        doctor = Doctor.query.filter_by(user_id=user_id).first()
-
-        added = 0
-
-        for slot in slot_list:
-
-            day, time_key = slot.split("|")
-
-            day_date = datetime.strptime(day,"%Y-%m-%d").date()
-
-            time_obj = SLOT_TIME_OBJECTS.get(time_key)
-
-            existing = Appointment.query.filter_by(
-                doctor_id = doctor.id,
-                Date = day_date,
-                Time = time_obj
-            ).first()
-
-            if not existing:
-
-                new_slot = Appointment(
-                    doctor_id = doctor.id,
-                    Date = day_date,
-                    Time = time_obj,
-                    patient_id = None
-                )
-
-                db.session.add(new_slot)
-                added += 1
-
-        db.session.commit()
-
-        return {
-            "message": f"{added} slots added successfully"
-        }, 201
-class CancelSlotAPI(Resource):
-
-    @jwt_required()
-    def post(self):
-
-        data = request.get_json()
-
-        day = data.get("day")
-        time_key = data.get("time")
-
-        user_id = get_jwt_identity()
-
-        doctor = Doctor.query.filter_by(user_id=user_id).first()
-
-        day_date = datetime.strptime(day,"%Y-%m-%d").date()
-
-        time_obj = SLOT_TIME_OBJECTS.get(time_key)
-
-        appt = Appointment.query.filter_by(
-            doctor_id = doctor.id,
-            Date = day_date,
-            Time = time_obj
-        ).first()
-
-        if not appt:
-            return {"message":"Slot not found"},404
-
-        # If patient booked → just remove patient
-        if appt.patient_id:
-            appt.patient_id = None
-
-        # If not booked → delete slot
-        else:
-            db.session.delete(appt)
-
-        db.session.commit()
-
-        return {"message":"Slot cancelled successfully"},200
-
-
-class ViewSlots(Resource):
-    @jwt_required()
-    def get(self):
-        """Return all slots (Booked/Available) for next 7 days."""
+        """Return next 7 days slots for the doctor with status."""
         email = get_jwt_identity()
-        user = User.query.filter_by(email=email).first()
-        if not user or user.role != 2:
-            return {"message": "Access denied"}, 403
-
         doctor = Doctor.query.filter_by(email=email).first()
         if not doctor:
             return {"message": "Doctor not found"}, 404
 
         today = date.today()
-        end_date = today + timedelta(days=6)
+        now = datetime.now().time()
+        dates = [(today + timedelta(days=i)).isoformat() for i in range(7)]
+        slots = {}
 
-        appointments = Appointment.query.filter(
-            Appointment.doctor_id == doctor.id,
-            Appointment.date.between(today, end_date)
-        ).order_by(Appointment.date, Appointment.time).all()
+        for d in dates:
+            day_date = datetime.strptime(d, "%Y-%m-%d").date()
+            day_slots = []
 
-        slots = [
-            {
-                "id": a.id,
-                "date": a.date.strftime("%Y-%m-%d"),
-                "time": a.time.strftime("%H:%M"),
-                "Status": a.Status
-            } for a in appointments
-        ]
+            for key, slot_time in SLOT_TIME_OBJECTS.items():
+                # Skip past slots for today
+                if day_date == today and slot_time < now:
+                    continue
+
+                appt = Appointment.query.filter_by(
+                    doctor_id=doctor.id,
+                    date=day_date,
+                    time=slot_time
+                ).first()
+
+                if appt:
+                    if appt.patient_id:
+                        status = "Booked"
+                    else:
+                        status = "Available"
+                else:
+                    status = "Not Created"
+
+                day_slots.append({
+                    "time_key": key,
+                    "label": SLOT_LABELS.get(key, key),
+                    "status": status,
+                    "is_booked": status == "Booked",
+                    "is_available": status == "Available"
+                })
+
+            slots[d] = day_slots
+
+        return {"dates": dates, "slots": slots}, 200
+
+    @jwt_required()
+    def post(self):
+        """Doctor adds new slots for upcoming days."""
+        data = request.get_json()
+        slot_list = data.get("slots", [])
+        email = get_jwt_identity()
+        doctor = Doctor.query.filter_by(email=email).first()
+        if not doctor:
+            return {"message": "Doctor not found"}, 404
+
+        added = 0
+        for slot in slot_list:
+            day, time_key = slot.split("|")
+            day_date = datetime.strptime(day, "%Y-%m-%d").date()
+            time_obj = SLOT_TIME_OBJECTS.get(time_key)
+            if not time_obj:
+                continue
+
+            existing = Appointment.query.filter_by(
+                doctor_id=doctor.id,
+                date=day_date,
+                time=time_obj
+            ).first()
+
+            if not existing:
+                new_slot = Appointment(
+                    doctor_id=doctor.id,
+                    date=day_date,
+                    time=time_obj,
+                    patient_id=None
+                )
+                db.session.add(new_slot)
+                added += 1
+
+        db.session.commit()
+        return {"message": f"{added} slots added successfully"}, 201
+
+
+class CancelSlotAPI(Resource):
+    @jwt_required()
+    def post(self):
+        """Cancel a slot: free if booked, delete if available."""
+        data = request.get_json()
+        day = data.get("day")
+        time_key = data.get("time")
+        email = get_jwt_identity()
+        doctor = Doctor.query.filter_by(email=email).first()
+        if not doctor:
+            return {"message": "Doctor not found"}, 404
+
+        day_date = datetime.strptime(day, "%Y-%m-%d").date()
+        time_obj = SLOT_TIME_OBJECTS.get(time_key)
+        if not time_obj:
+            return {"message": "Invalid time slot"}, 400
+
+        appt = Appointment.query.filter_by(
+            doctor_id=doctor.id,
+            date=day_date,
+            time=time_obj
+        ).first()
+
+        if not appt:
+            return {"message": "Slot not found"}, 404
+
+        if appt.patient_id:
+            appt.patient_id = None
+        else:
+            db.session.delete(appt)
+
+        db.session.commit()
+        return {"message": "Slot cancelled successfully"}, 200
+
+
+class ViewSlots(Resource):
+    @jwt_required()
+    def get(self):
+        """Return slots for next 7 days including status for frontend rendering."""
+        email = get_jwt_identity()
+        doctor = Doctor.query.filter_by(email=email).first()
+        if not doctor:
+            return {"message": "Doctor not found"}, 404
+
+        today = date.today()
+        slots = []
+
+        for day_offset in range(7):
+            day_date = today + timedelta(days=day_offset)
+            for key, time_obj in SLOT_TIME_OBJECTS.items():
+                appt = Appointment.query.filter_by(
+                    doctor_id=doctor.id,
+                    date=day_date,
+                    time=time_obj
+                ).first()
+
+                if appt:
+                    if appt.patient_id:
+                        status = "Booked"
+                    else:
+                        status = "Available"
+                else:
+                    status = "Not Created"
+
+                slots.append({
+                    "date": day_date.strftime("%Y-%m-%d"),
+                    "time_key": key,
+                    "label": SLOT_LABELS.get(key, key),
+                    "status": status,
+                    "is_booked": status == "Booked",
+                    "is_available": status == "Available"
+                })
 
         return {"slots": slots}, 200
 
-
-# Add resources
 api.add_resource(ManageSlots, "/manage_slots")
-api.add_resource(ViewSlots, "/view_slots")
 api.add_resource(CancelSlotAPI, "/cancel_slot")
+api.add_resource(ViewSlots, "/view_slots")
