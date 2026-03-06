@@ -24,79 +24,81 @@ const router = createRouter({
       component: () => import('../views/RegisterView.vue'),
     },
 
-    // ---------------- PATIENT ----------------
+    // Patient
     {
       path: '/patient/dashboard',
       name: 'patient-dashboard',
       component: () => import('../views/Patient/Dashboard.vue'),
     },
-
     {
       path: '/patient/history/:id',
       name: 'patient-history',
       component: () => import('../views/Patient/History.vue'),
     },
+    {
+      path: '/editpatient/:id',
+      name: 'patient-edit',
+      component: () => import('../views/Patient/EditPatient.vue'),
+    },
 
-    // ---------------- DOCTOR ----------------
+    // Doctor
     {
       path: '/doctor/dashboard',
       name: 'doctor-dashboard',
       component: () => import('../views/Doctor/Dashboard.vue'),
     },
-
     {
       path: '/doctor/manage-slots',
       name: 'doctor-manage-slots',
       component: () => import('../views/Doctor/ManageSlots.vue'),
     },
-
     {
       path: '/doctor/treatment/:id',
       name: 'doctor-treatment',
       component: () => import('../views/Doctor/AddTreatment.vue'),
     },
 
-    // ---------------- ADMIN ----------------
+    // Admin
     {
       path: '/admin/dashboard',
       name: 'admin-dashboard',
       component: () => import('../views/Admin/Dashboard.vue'),
     },
-
     {
       path: '/admin/doctors',
       name: 'admin-doctors',
       component: () => import('../views/Admin/Add_Doctor.vue'),
     },
-
     {
       path: '/admin/update-doctor',
       name: 'admin-update-doctor',
       component: () => import('../views/Admin/Update_Doctor.vue'),
     },
-
     {
       path: '/admin/patients',
       name: 'admin-patients',
       component: () => import('../views/Admin/Patients.vue'),
     },
-
     {
       path: '/admin/update-patient',
       name: 'admin-update-patient',
       component: () => import('../views/Admin/Update_Patient.vue'),
     },
-
     {
       path: '/admin/appointments',
       name: 'admin-appointments',
       component: () => import('../views/Admin/Appointments.vue'),
     },
-
     {
       path: '/admin/search',
       name: 'admin-search',
       component: () => import('../views/Admin/Admin_Search.vue'),
+    },
+
+    {
+      path: '/:pathMatch(.*)*',
+      name: 'not-found',
+      component: () => import('../views/NotFound.vue'),
     },
   ],
 })

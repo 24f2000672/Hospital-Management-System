@@ -148,6 +148,7 @@ export default {
   name: "PatientDashboard",
   data() {
     return {
+      patient: null,
       departments: [],
       doctors: [],
       myAppointments: [],
@@ -178,18 +179,17 @@ export default {
           headers: { Authorization: `Bearer ${token}` },
         });
 
+        this.patient = res.data.patient;
         this.departments = res.data.departments || [];
         this.doctors = res.data.doctors || [];
         this.myAppointments = res.data.upcoming_appointments || [];
         this.treatmentHistory = res.data.treatment_history || [];
 
         // Map doctors to their departments
-        this.departmentsWithDoctors = this.departments.map((dep) => {
-          return {
-            ...dep,
-            doctors: this.doctors.filter((doc) => doc.Department === dep.Dept_id),
-          };
-        });
+        this.departmentsWithDoctors = this.departments.map((dep) => ({
+          ...dep,
+          doctors: this.doctors.filter((doc) => doc.Department === dep.Dept_id),
+        }));
       } catch (err) {
         console.error("Dashboard fetch error:", err.response?.data || err);
         if (err.response?.status === 401) this.$router.push("/login");
@@ -203,7 +203,8 @@ export default {
       return t.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
     },
     goToProfile() {
-      this.$router.push("/edit-profile");
+      if (!this.patient || !this.patient.patient_id) return;
+      this.$router.push(`/editpatient/${this.patient.patient_id}`);
     },
     goToDoctorProfile(docId) {
       this.$router.push(`/doctor/${docId}`);

@@ -19,9 +19,7 @@
 
     <!-- SCROLLING BANNER -->
     <div class="scroll-container">
-      <div class="scroll-text">
-        Your health journey begins here — log in to care for yourself
-      </div>
+      <div class="scroll-text">Your health journey begins here — log in to care for yourself</div>
     </div>
 
     <!-- LOGIN FORM -->

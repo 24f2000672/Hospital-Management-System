@@ -625,24 +625,56 @@ class Search(Resource):
 
         return {"doctors": doctors, "patients": patients}, 200
 api.add_resource(Search, "/search")
-class editPatient(Resource):
+from flask_restful import Resource
+from flask_jwt_extended import jwt_required, get_jwt_identity
+
+class editpatient(Resource):
     @jwt_required()
-    def put(self, patient_id):
+    def get(self, patient_id):
         user_email = get_jwt_identity()
         current_user = User.query.filter_by(email=user_email).first()
-
-        if current_user.role != 1:
-            return {"message": "Only admin can update patient"}, 403
 
         patient = Patient.query.get(patient_id)
         if not patient:
             return {"message": "Patient not found"}, 404
 
+        
+        return {
+            "patient": {
+                "patient_id": patient.id,
+                "First_Name": patient.first_name,
+                "Last_Name": patient.last_name,
+                "Age": patient.age,
+                "Gender": patient.gender,
+                "Address": patient.address,
+                "Phone_no": patient.phone,
+                "DOB": patient.dob, 
+                "Has_Insurance": patient.insurance,
+            }
+        }, 200
+
+    @jwt_required()
+    def put(self, patient_id):
+        patient = Patient.query.get(patient_id)
+        if not patient:
+            return {"message": "Patient not found"}, 404
+
         data = request.get_json()
-        patient.first_name = data.get("fn", patient.first_name)
-        patient.last_name = data.get("ln", patient.last_name)
-        patient.age = data.get("age", patient.age)
-        patient.phone = data.get("phone", patient.phone)
+
+        
+        patient.first_name = data.get("First_Name", patient.first_name)
+        patient.last_name = data.get("Last_Name", patient.last_name)
+        patient.age = data.get("Age", patient.age)
+        patient.gender = data.get("Gender", patient.gender)
+        patient.address = data.get("Address", patient.address)
+        patient.phone = data.get("Phone_no", patient.phone)
+        patient.dob = data.get("DOB", patient.dob)
+        patient.insurance = data.get("Has_Insurance", patient.insurance)
+
+        db.session.commit()
+        return {"message": "Patient updated successfully!"}, 200
+
+api.add_resource(editpatient, "/editpatient/<int:patient_id>")
 
 class ManageSlots(Resource):
     @jwt_required()

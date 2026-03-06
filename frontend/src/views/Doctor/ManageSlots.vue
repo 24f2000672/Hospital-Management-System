@@ -85,9 +85,7 @@
         </div>
 
         <div class="text-center mb-4 mt-3">
-          <button class="btn btn-info" :disabled="!selectedSlots.length">
-            Add Selected Slots
-          </button>
+          <button class="btn btn-info" :disabled="!selectedSlots.length">Add Selected Slots</button>
           <button type="button" class="btn btn-secondary ms-2" @click="goDashboard">
             Return to Dashboard
           </button>
@@ -98,10 +96,10 @@
 </template>
 
 <script>
-import axios from "axios";
+import axios from 'axios'
 
 export default {
-  name: "ManageSlots",
+  name: 'ManageSlots',
   data() {
     return {
       dates: [],
@@ -109,93 +107,93 @@ export default {
       selectedSlots: [],
       flashMessage: null,
       loading: false,
-    };
+    }
   },
   mounted() {
-    this.fetchSlots();
+    this.fetchSlots()
   },
   methods: {
     formatDate(date) {
-      return new Date(date).toDateString();
+      return new Date(date).toDateString()
     },
     getToken() {
-      const token = localStorage.getItem("access_token");
+      const token = localStorage.getItem('access_token')
       if (!token) {
-        alert("Session expired. Please login again.");
-        this.$router.push("/login");
-        return null;
+        alert('Session expired. Please login again.')
+        this.$router.push('/login')
+        return null
       }
-      return token;
+      return token
     },
     async fetchSlots() {
-      this.loading = true;
+      this.loading = true
       try {
-        const token = this.getToken();
-        if (!token) return;
+        const token = this.getToken()
+        if (!token) return
 
-        const res = await axios.get("http://127.0.0.1:5000/manage_slots", {
+        const res = await axios.get('http://127.0.0.1:5000/manage_slots', {
           headers: { Authorization: `Bearer ${token}` },
-        });
+        })
 
-        this.dates = res.data.dates || [];
-        this.slots = res.data.slots || {};
+        this.dates = res.data.dates || []
+        this.slots = res.data.slots || {}
       } catch (err) {
-        console.error("Fetch Slots Error:", err.response?.data || err);
-        if (err.response?.status === 401) this.$router.push("/login");
+        console.error('Fetch Slots Error:', err.response?.data || err)
+        if (err.response?.status === 401) this.$router.push('/login')
       } finally {
-        this.loading = false;
+        this.loading = false
       }
     },
     async updateSlots() {
       if (!this.selectedSlots.length) {
-        alert("Please select slots to add");
-        return;
+        alert('Please select slots to add')
+        return
       }
       try {
-        const token = this.getToken();
-        if (!token) return;
+        const token = this.getToken()
+        if (!token) return
 
         const res = await axios.post(
-          "http://127.0.0.1:5000/manage_slots",
+          'http://127.0.0.1:5000/manage_slots',
           { slots: this.selectedSlots },
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
+          { headers: { Authorization: `Bearer ${token}` } },
+        )
 
-        this.flashMessage = res.data.message;
-        this.selectedSlots = [];
-        await this.fetchSlots();
+        this.flashMessage = res.data.message
+        this.selectedSlots = []
+        await this.fetchSlots()
       } catch (err) {
-        console.error("Update Slots Error:", err.response?.data || err);
+        console.error('Update Slots Error:', err.response?.data || err)
       }
     },
     async cancelSlot(day, time_key) {
-      if (!confirm(`Cancel slot on ${day} at ${time_key}?`)) return;
+      if (!confirm(`Cancel slot on ${day} at ${time_key}?`)) return
 
       try {
-        const token = this.getToken();
-        if (!token) return;
+        const token = this.getToken()
+        if (!token) return
 
         const res = await axios.post(
-          "http://127.0.0.1:5000/cancel_slot",
+          'http://127.0.0.1:5000/cancel_slot',
           { day, time: time_key },
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
+          { headers: { Authorization: `Bearer ${token}` } },
+        )
 
-        this.flashMessage = res.data.message;
-        await this.fetchSlots();
+        this.flashMessage = res.data.message
+        await this.fetchSlots()
       } catch (err) {
-        console.error("Cancel Slot Error:", err.response?.data || err);
+        console.error('Cancel Slot Error:', err.response?.data || err)
       }
     },
     goDashboard() {
-      this.$router.push("/doctor/dashboard");
+      this.$router.push('/doctor/dashboard')
     },
     logout() {
-      localStorage.removeItem("access_token");
-      this.$router.push("/login");
+      localStorage.removeItem('access_token')
+      this.$router.push('/login')
     },
   },
-};
+}
 </script>
 
 <style scoped>
