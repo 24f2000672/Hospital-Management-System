@@ -1,96 +1,74 @@
 <template>
-  <div
-    style="
-      background: linear-gradient(to right, #ccccff, #66ccff, #ff8566, #ccccff, #ff8566);
-      min-height: 100vh;
-    "
-  >
-    <!-- Navbar -->
-    <nav style="background-color: white" class="navbar d-flex align-items-center">
-      <div class="container-fluid d-flex justify-content-between align-items-center">
-        <div class="d-flex align-items-center">
-          <img src="@/assets/logo.png" height="70" width="70" />
-        </div>
-        <div>
-          <h1 class="text-center">Vardha Hospital</h1>
-        </div>
-        <button class="btn btn-outline-danger" @click="logout">Logout</button>
+  <div class="doctor-page">
+    <header
+      style="background-color: white"
+      class="navbar d-flex justify-content-between align-items-center px-4"
+    >
+      <div>
+        <img src="@/assets/logo.png" height="80" width="80" alt="Logo" />
       </div>
-    </nav>
+
+      <div class="text-center">
+        <h1>Vardha Hospital</h1>
+      </div>
+
+      <nav style="display: flex; gap: 20px">
+        <button class="btn btn-outline-secondary" @click="goBack">Dashboard</button>
+        <button class="btn btn-outline-danger" @click="logout">Logout</button>
+      </nav>
+    </header>
 
     <marquee style="background-color: black; color: white">
-      Every patient you heal is a story of hope — thank you for being the heart of care.
+      Configure next week slots so patients can book without delays.
     </marquee>
 
-    <div class="container mt-3" v-if="flashMessage">
-      <div class="alert alert-info alert-dismissible fade show">
-        {{ flashMessage }}
-        <button class="btn-close" @click="flashMessage = null"></button>
+    <div class="container py-4">
+      <h3 class="mb-3">Manage Appointment Slots</h3>
+
+      <div class="mb-3">
+        <button class="btn btn-primary" :disabled="saving || selectedSlots.length === 0" @click="saveSlots">
+          {{ saving ? 'Saving...' : `Add Selected Slots (${selectedSlots.length})` }}
+        </button>
       </div>
-    </div>
 
-    <div v-if="loading" class="text-center mt-5">
-      <h4>Loading slots...</h4>
-    </div>
+      <div v-if="loading" class="alert alert-info">Loading slots...</div>
+      <div v-else-if="error" class="alert alert-danger">{{ error }}</div>
 
-    <div v-else class="container mt-3">
-      <h3 class="text-center mb-4">Manage Appointment Slots</h3>
-
-      <form @submit.prevent="updateSlots">
-        <div v-for="day in dates" :key="day" class="card mb-3">
-          <div class="card-header bg-primary text-white">
-            {{ formatDate(day) }}
-          </div>
-
-          <div class="card-body d-flex flex-wrap gap-2">
-            <div
-              v-for="slot in slots[day]"
-              :key="slot.time_key"
-              class="slot-box p-2 text-center"
-              :class="{
-                booked: slot.status === 'Booked',
-                available: slot.status === 'Available',
-                notcreated: slot.status === 'Not Created',
-              }"
-            >
-              <div v-if="slot.status === 'Booked'">
-                {{ slot.label }}
-                <span class="badge bg-success ms-1">Booked</span>
+      <div v-else>
+        <div v-for="day in dates" :key="day" class="card mb-3 shadow-sm">
+          <div class="card-header bg-primary text-white">{{ day }}</div>
+          <div class="card-body">
+            <div v-for="timeKey in timeOptions" :key="`${day}-${timeKey}`" class="d-flex align-items-center mb-2">
+              <template v-if="slotMap[slotKey(day, timeKey)]">
+                <span class="me-2">
+                  {{ slotLabels[timeKey] || timeKey }} -
+                  <strong>{{ slotMap[slotKey(day, timeKey)].Status }}</strong>
+                </span>
                 <button
-                  type="button"
-                  class="btn btn-sm btn-outline-danger mt-1"
-                  @click="cancelSlot(day, slot.time_key)"
+                  v-if="slotMap[slotKey(day, timeKey)].Status === 'Available'"
+                  class="btn btn-outline-danger btn-sm"
+                  :disabled="saving"
+                  @click="cancelSlot(slotMap[slotKey(day, timeKey)].App_id)"
                 >
-                  Cancel
+                  Remove Slot
                 </button>
-              </div>
-
-              <div v-else-if="slot.status === 'Available'">
-                {{ slot.label }}
-                <span class="badge bg-primary ms-1">Available</span>
-              </div>
-
-              <div v-else>
+              </template>
+              <template v-else>
                 <input
+                  :id="`slot-${day}-${timeKey}`"
+                  v-model="selectedSlotSet"
+                  class="form-check-input me-2"
                   type="checkbox"
-                  class="form-check-input me-1"
-                  :value="`${day}|${slot.time_key}`"
-                  v-model="selectedSlots"
+                  :value="slotKey(day, timeKey)"
                 />
-                {{ slot.label }}
-                <span class="badge bg-secondary ms-1">Not Created</span>
-              </div>
+                <label :for="`slot-${day}-${timeKey}`" class="form-check-label">
+                  {{ slotLabels[timeKey] || timeKey }} (Add)
+                </label>
+              </template>
             </div>
           </div>
         </div>
-
-        <div class="text-center mb-4 mt-3">
-          <button class="btn btn-info" :disabled="!selectedSlots.length">Add Selected Slots</button>
-          <button type="button" class="btn btn-secondary ms-2" @click="goDashboard">
-            Return to Dashboard
-          </button>
-        </div>
-      </form>
+      </div>
     </div>
   </div>
 </template>
@@ -99,134 +77,131 @@
 import axios from 'axios'
 
 export default {
-  name: 'ManageSlots',
+  name: 'DoctorManageSlots',
   data() {
     return {
+      loading: true,
+      saving: false,
+      error: '',
+      docId: null,
       dates: [],
-      slots: {},
-      selectedSlots: [],
-      flashMessage: null,
-      loading: false,
+      timeOptions: [],
+      slotLabels: {},
+      slots: [],
+      selectedSlotSet: [],
     }
   },
-  mounted() {
-    this.fetchSlots()
+  computed: {
+    selectedSlots() {
+      return this.selectedSlotSet.map((value) => {
+        const [dateValue, timeValue] = value.split('|')
+        return { date: dateValue, time: timeValue }
+      })
+    },
+    slotMap() {
+      const mapping = {}
+      this.slots.forEach((s) => {
+        mapping[this.slotKey(s.Date, s.Time)] = s
+      })
+      return mapping
+    },
   },
   methods: {
-    formatDate(date) {
-      return new Date(date).toDateString()
+    slotKey(day, time) {
+      return `${day}|${time}`
     },
     getToken() {
-      const token = localStorage.getItem('access_token')
-      if (!token) {
-        alert('Session expired. Please login again.')
-        this.$router.push('/login')
-        return null
-      }
-      return token
-    },
-    async fetchSlots() {
-      this.loading = true
-      try {
-        const token = this.getToken()
-        if (!token) return
-
-        const res = await axios.get('http://127.0.0.1:5000/manage_slots', {
-          headers: { Authorization: `Bearer ${token}` },
-        })
-
-        this.dates = res.data.dates || []
-        this.slots = res.data.slots || {}
-      } catch (err) {
-        console.error('Fetch Slots Error:', err.response?.data || err)
-        if (err.response?.status === 401) this.$router.push('/login')
-      } finally {
-        this.loading = false
-      }
-    },
-    async updateSlots() {
-      if (!this.selectedSlots.length) {
-        alert('Please select slots to add')
-        return
-      }
-      try {
-        const token = this.getToken()
-        if (!token) return
-
-        const res = await axios.post(
-          'http://127.0.0.1:5000/manage_slots',
-          { slots: this.selectedSlots },
-          { headers: { Authorization: `Bearer ${token}` } },
-        )
-
-        this.flashMessage = res.data.message
-        this.selectedSlots = []
-        await this.fetchSlots()
-      } catch (err) {
-        console.error('Update Slots Error:', err.response?.data || err)
-      }
-    },
-    async cancelSlot(day, time_key) {
-      if (!confirm(`Cancel slot on ${day} at ${time_key}?`)) return
-
-      try {
-        const token = this.getToken()
-        if (!token) return
-
-        const res = await axios.post(
-          'http://127.0.0.1:5000/cancel_slot',
-          { day, time: time_key },
-          { headers: { Authorization: `Bearer ${token}` } },
-        )
-
-        this.flashMessage = res.data.message
-        await this.fetchSlots()
-      } catch (err) {
-        console.error('Cancel Slot Error:', err.response?.data || err)
-      }
-    },
-    goDashboard() {
-      this.$router.push('/doctor/dashboard')
+      return localStorage.getItem('access_token')
     },
     logout() {
       localStorage.removeItem('access_token')
       this.$router.push('/login')
     },
+    goBack() {
+      this.$router.push('/doctor/dashboard')
+    },
+    async loadSlots() {
+      this.loading = true
+      this.error = ''
+      const token = this.getToken()
+      if (!token) {
+        this.$router.push('/login')
+        return
+      }
+
+      const routeDocId = Number(this.$route.params.doc_id)
+      if (!routeDocId) {
+        this.error = 'Invalid doctor id.'
+        this.loading = false
+        return
+      }
+
+      this.docId = routeDocId
+
+      try {
+        const resp = await axios.get(`http://127.0.0.1:5000/doctor/slots/${this.docId}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+
+        this.dates = resp.data.dates || []
+        this.timeOptions = resp.data.time_options || []
+        this.slotLabels = resp.data.slot_labels || {}
+        this.slots = resp.data.slots || []
+      } catch (err) {
+        console.error(err)
+        this.error = 'Unable to load slots.'
+      } finally {
+        this.loading = false
+      }
+    },
+    async saveSlots() {
+      if (!this.selectedSlots.length || !this.docId) {
+        return
+      }
+
+      this.saving = true
+      try {
+        const token = this.getToken()
+        await axios.post(
+          `http://127.0.0.1:5000/doctor/slots/${this.docId}`,
+          { slots: this.selectedSlots },
+          { headers: { Authorization: `Bearer ${token}` } },
+        )
+
+        this.selectedSlotSet = []
+        await this.loadSlots()
+      } catch (err) {
+        console.error(err)
+        alert('Failed to add selected slots.')
+      } finally {
+        this.saving = false
+      }
+    },
+    async cancelSlot(slotId) {
+      this.saving = true
+      try {
+        const token = this.getToken()
+        await axios.delete(`http://127.0.0.1:5000/doctor/slots/cancel/${slotId}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        await this.loadSlots()
+      } catch (err) {
+        console.error(err)
+        alert('Failed to remove slot.')
+      } finally {
+        this.saving = false
+      }
+    },
+  },
+  mounted() {
+    this.loadSlots()
   },
 }
 </script>
 
 <style scoped>
-.slot-box {
-  width: 120px;
-  border-radius: 6px;
-  padding: 5px;
-  font-weight: bold;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-/* Status colors */
-.booked {
-  background-color: #d4edda;
-  border: 1px solid #28a745;
-  color: #155724;
-}
-
-.available {
-  background-color: #cce5ff;
-  border: 1px solid #004085;
-  color: #004085;
-}
-
-.notcreated {
-  background-color: #f8f9fa;
-  border: 1px solid #6c757d;
-  color: #6c757d;
-}
-
-/* Hover effect */
-.slot-box:hover {
-  transform: scale(1.05);
+.doctor-page {
+  min-height: 100vh;
+  background: linear-gradient(to right, #ccccff, #66ccff, #ff8566, #ccccff, #ff8566);
 }
 </style>

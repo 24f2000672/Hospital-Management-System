@@ -1,9 +1,15 @@
 <template>
   <div
-    style="background: linear-gradient(to right,#ccccff,#66ccff,#ff8566,#ccccff,#ff8566); min-height:100vh;"
+    style="
+      background: linear-gradient(to right, #ccccff, #66ccff, #ff8566, #ccccff, #ff8566);
+      min-height: 100vh;
+    "
   >
     <!-- Navbar -->
-    <nav class="navbar d-flex justify-content-between align-items-center px-4" style="background-color: white;">
+    <nav
+      class="navbar d-flex justify-content-between align-items-center px-4"
+      style="background-color: white"
+    >
       <div class="logo-section">
         <img src="@/assets/logo.png" height="80" width="80" alt="Logo" />
       </div>
@@ -17,7 +23,7 @@
       </div>
     </nav>
 
-    <marquee style="background-color:black;color:white;">
+    <marquee style="background-color: black; color: white">
       Editing patient details — make sure information is correct.
     </marquee>
 
@@ -80,87 +86,87 @@
 </template>
 
 <script>
-import axios from "axios";
+import axios from 'axios'
 
 export default {
-  name: "EditPatient",
+  name: 'EditPatient',
   data() {
     return {
       patient: {
-        First_Name: "",
-        Last_Name: "",
-        Age: "",
-        Gender: "",
-        Address: "",
-        Phone_no: "",
-        DOB: "",
-        Has_Insurance: "",
-        patient_id: null
+        First_Name: '',
+        Last_Name: '',
+        Age: '',
+        Gender: '',
+        Address: '',
+        Phone_no: '',
+        DOB: '',
+        Has_Insurance: '',
+        patient_id: null,
       },
       flashMessage: null,
-    };
+    }
   },
   mounted() {
-    this.fetchPatient();
+    this.fetchPatient()
   },
   methods: {
     getToken() {
-      const token = localStorage.getItem("access_token");
+      const token = localStorage.getItem('access_token')
       if (!token) {
-        alert("Session expired. Please login again.");
-        this.$router.push("/login");
-        return null;
+        alert('Session expired. Please login again.')
+        this.$router.push('/login')
+        return null
       }
-      return token;
+      return token
     },
     async fetchPatient() {
       try {
-        const token = this.getToken();
-        if (!token) return;
+        const token = this.getToken()
+        if (!token) return
 
-        const patientId = this.$route.params.id; 
-        const res = await axios.get(
-          `http://127.0.0.1:5000/editpatient/${patientId}`,
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
+        const patientId = this.$route.params.id
+        const res = await axios.get(`http://127.0.0.1:5000/editpatient/${patientId}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
 
-        this.patient = res.data.patient;
+        this.patient = res.data.patient
       } catch (err) {
-        console.error("Fetch patient error:", err.response?.data || err);
-        this.flashMessage = err.response?.data?.message || "Failed to fetch patient";
+        console.error('Fetch patient error:', err.response?.data || err)
+        this.flashMessage = err.response?.data?.message || 'Failed to fetch patient'
       }
     },
     async updatePatient() {
       try {
-        const token = this.getToken();
-        if (!token) return;
+        const token = this.getToken()
+        if (!token) return
 
-        const patientId = this.$route.params.id;
+        const patientId = this.$route.params.id
         const res = await axios.put(
           `http://127.0.0.1:5000/editpatient/${patientId}`,
           this.patient,
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
+          { headers: { Authorization: `Bearer ${token}` } },
+        )
 
-        this.flashMessage = res.data.message || "Patient updated successfully!";
+        this.flashMessage = res.data.message || 'Patient updated successfully!'
       } catch (err) {
-        console.error("Update patient error:", err.response?.data || err);
-        this.flashMessage = err.response?.data?.message || "Failed to update patient";
+        console.error('Update patient error:', err.response?.data || err)
+        this.flashMessage = err.response?.data?.message || 'Failed to update patient'
       }
     },
     goBack() {
-      this.$router.push("/admin/dashboard");
+      this.$router.push('/admin/dashboard')
     },
     logout() {
-      localStorage.removeItem("access_token");
-      this.$router.push("/login");
+      localStorage.removeItem('access_token')
+      this.$router.push('/login')
     },
   },
-};
+}
 </script>
 
 <style scoped>
-body, html {
+body,
+html {
   height: 100%;
   margin: 0;
   font-family: Arial;

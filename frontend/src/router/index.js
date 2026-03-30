@@ -48,7 +48,7 @@ const router = createRouter({
       component: () => import('../views/Doctor/Dashboard.vue'),
     },
     {
-      path: '/doctor/manage-slots',
+      path: '/doctor/manage-slots/:doc_id',
       name: 'doctor-manage-slots',
       component: () => import('../views/Doctor/ManageSlots.vue'),
     },
