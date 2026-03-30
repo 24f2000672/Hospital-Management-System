@@ -19,7 +19,7 @@
     </header>
 
     <marquee style="background-color: black; color: white">
-      Record diagnosis and treatment so patient history stays accurate.
+      Record diagnosis and treatment so patient history stays accurate and care is continuous.
     </marquee>
 
     <div class="container py-4">
