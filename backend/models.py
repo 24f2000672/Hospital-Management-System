@@ -96,3 +96,25 @@ class Treatment(db.Model):
     progress = db.Column(db.String(25))
 
     appointment = db.relationship('Appointment', backref='treatments')
+
+
+class ExportJob(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    task_id = db.Column(db.String(128), unique=True, nullable=True)
+    patient_id = db.Column(db.Integer, db.ForeignKey('patient.id'), nullable=False)
+    status = db.Column(db.String(20), default="PENDING")
+    file_path = db.Column(db.String(255), nullable=True)
+    error_message = db.Column(db.String(255), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    completed_at = db.Column(db.DateTime, nullable=True)
+
+    patient = db.relationship('Patient', backref='export_jobs')
+
+
+class NotificationLog(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    recipient = db.Column(db.String(100), nullable=False)
+    channel = db.Column(db.String(20), nullable=False)
+    subject = db.Column(db.String(120), nullable=True)
+    message = db.Column(db.String(500), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)

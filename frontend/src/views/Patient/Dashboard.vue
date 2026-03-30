@@ -74,6 +74,22 @@
           <h5 class="mb-0">Treatment History</h5>
         </div>
         <div class="card-body">
+          <div class="d-flex flex-wrap gap-2 mb-3">
+            <button class="btn btn-outline-primary btn-sm" :disabled="exporting" @click="startExport">
+              {{ exporting ? 'Export in progress...' : 'Export Treatment History (CSV)' }}
+            </button>
+            <button
+              v-if="exportDownloadUrl"
+              class="btn btn-success btn-sm"
+              @click="downloadExport"
+            >
+              Download CSV
+            </button>
+          </div>
+          <p v-if="exportStatus" class="mb-2"><strong>Export Status:</strong> {{ exportStatus }}</p>
+          <p v-if="exportMessage" class="text-success mb-2">{{ exportMessage }}</p>
+          <p v-if="exportError" class="text-danger mb-2">{{ exportError }}</p>
+
           <div v-if="treatmentHistory.length" class="table-responsive">
             <table class="table table-bordered mb-0">
               <thead>
@@ -173,6 +189,13 @@ export default {
       doctors: [],
       departments: [],
       availableSlots: [],
+      exporting: false,
+      exportStatus: '',
+      exportJobId: null,
+      exportDownloadUrl: '',
+      exportMessage: '',
+      exportError: '',
+      exportPoller: null,
     }
   },
   computed: {
@@ -262,9 +285,105 @@ export default {
         this.loading = false
       }
     },
+    async startExport() {
+      this.exporting = true
+      this.exportStatus = 'QUEUED'
+      this.exportError = ''
+      this.exportMessage = ''
+      this.exportDownloadUrl = ''
+
+      try {
+        const resp = await axios.post(
+          'http://127.0.0.1:5000/patient/export-treatment-history',
+          {},
+          { headers: this.tokenHeaders() },
+        )
+        this.exportJobId = resp.data.job_id
+        this.exportStatus = resp.data.status || 'QUEUED'
+        this.startExportPolling()
+      } catch (err) {
+        console.error(err)
+        this.exporting = false
+        this.exportError = err?.response?.data?.message || 'Failed to start export job.'
+      }
+    },
+    startExportPolling() {
+      if (this.exportPoller) {
+        clearInterval(this.exportPoller)
+      }
+      this.exportPoller = setInterval(this.pollExportStatus, 2000)
+    },
+    async pollExportStatus() {
+      if (!this.exportJobId) {
+        return
+      }
+
+      try {
+        const resp = await axios.get(
+          `http://127.0.0.1:5000/patient/export-treatment-history/${this.exportJobId}`,
+          { headers: this.tokenHeaders() },
+        )
+
+        this.exportStatus = resp.data.status || ''
+        if (resp.data.status === 'COMPLETED') {
+          this.exporting = false
+          this.exportMessage = 'Export completed. You can download the CSV now.'
+          this.exportDownloadUrl = `http://127.0.0.1:5000${resp.data.download_url}`
+          if (this.exportPoller) {
+            clearInterval(this.exportPoller)
+            this.exportPoller = null
+          }
+        } else if (resp.data.status === 'FAILED') {
+          this.exporting = false
+          this.exportError = resp.data.error || 'Export failed.'
+          if (this.exportPoller) {
+            clearInterval(this.exportPoller)
+            this.exportPoller = null
+          }
+        }
+      } catch (err) {
+        console.error(err)
+        this.exporting = false
+        this.exportError = 'Unable to fetch export status.'
+        if (this.exportPoller) {
+          clearInterval(this.exportPoller)
+          this.exportPoller = null
+        }
+      }
+    },
+    downloadExport() {
+      if (!this.exportDownloadUrl) {
+        return
+      }
+      axios
+        .get(this.exportDownloadUrl, {
+          headers: this.tokenHeaders(),
+          responseType: 'blob',
+        })
+        .then((resp) => {
+          const blobUrl = window.URL.createObjectURL(new Blob([resp.data]))
+          const link = document.createElement('a')
+          link.href = blobUrl
+          link.setAttribute('download', `treatment_history_${this.exportJobId || 'export'}.csv`)
+          document.body.appendChild(link)
+          link.click()
+          link.remove()
+          window.URL.revokeObjectURL(blobUrl)
+        })
+        .catch((err) => {
+          console.error(err)
+          this.exportError = err?.response?.data?.message || 'Failed to download export file.'
+        })
+    },
   },
   mounted() {
     this.loadDashboard()
+  },
+  beforeUnmount() {
+    if (this.exportPoller) {
+      clearInterval(this.exportPoller)
+      this.exportPoller = null
+    }
   },
 }
 </script>

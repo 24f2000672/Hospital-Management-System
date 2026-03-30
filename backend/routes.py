@@ -1,9 +1,10 @@
 from datetime import date, datetime, time, timedelta
-from flask import request
+import os
+from flask import request, send_file
 from flask_restful import Api, Resource
 from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity
 from sqlalchemy import distinct, or_
-from models import User, db, Patient, Doctor, Department, Appointment, Treatment
+from models import User, db, Patient, Doctor, Department, Appointment, Treatment, ExportJob
 
 api = Api()
 
@@ -327,6 +328,115 @@ class PatientCancelAppointment(Resource):
         booking.status = "Available"
         db.session.commit()
         return {"message": "Appointment cancelled successfully"}, 200
+
+
+class PatientExportTreatmentHistory(Resource):
+    @jwt_required()
+    def post(self):
+        email = get_jwt_identity()
+        current_user = User.query.filter_by(email=email).first()
+
+        if not current_user or current_user.role != 3:
+            return {"message": "Only patient can export treatment history"}, 403
+
+        patient_record = Patient.query.filter_by(email=current_user.email).first()
+        if not patient_record:
+            return {"message": "Patient record not found"}, 404
+
+        export_job = ExportJob(patient_id=patient_record.id, status="PENDING")
+        db.session.add(export_job)
+        db.session.commit()
+
+        # Import inside method to avoid import cycle during app startup.
+        from tasks import export_treatment_history_csv
+
+        task = export_treatment_history_csv.delay(export_job.id)
+        export_job.task_id = task.id
+        export_job.status = "QUEUED"
+        db.session.commit()
+
+        return {
+            "message": "Export started",
+            "job_id": export_job.id,
+            "task_id": task.id,
+            "status": export_job.status,
+        }, 202
+
+
+class PatientExportTreatmentHistoryStatus(Resource):
+    @jwt_required()
+    def get(self, job_id):
+        email = get_jwt_identity()
+        current_user = User.query.filter_by(email=email).first()
+
+        if not current_user or current_user.role != 3:
+            return {"message": "Only patient can view export status"}, 403
+
+        patient_record = Patient.query.filter_by(email=current_user.email).first()
+        if not patient_record:
+            return {"message": "Patient record not found"}, 404
+
+        export_job = ExportJob.query.get(job_id)
+        if not export_job or export_job.patient_id != patient_record.id:
+            return {"message": "Export job not found"}, 404
+
+        # Reconcile DB status with Celery task state so UI does not spin forever.
+        if export_job.task_id and export_job.status in {"QUEUED", "RUNNING"}:
+            from celery.result import AsyncResult
+            from celery_app import celery
+
+            task_state = AsyncResult(export_job.task_id, app=celery).state
+
+            if task_state in {"FAILURE", "REVOKED"}:
+                export_job.status = "FAILED"
+                export_job.error_message = f"Task ended with state: {task_state}"
+                export_job.completed_at = datetime.utcnow()
+                db.session.commit()
+            elif task_state == "PENDING" and export_job.created_at:
+                age_seconds = (datetime.utcnow() - export_job.created_at).total_seconds()
+                if age_seconds > 180:
+                    export_job.status = "FAILED"
+                    export_job.error_message = "Task is stale in queue. Please retry export."
+                    export_job.completed_at = datetime.utcnow()
+                    db.session.commit()
+
+        return {
+            "job_id": export_job.id,
+            "task_id": export_job.task_id,
+            "status": export_job.status,
+            "error": export_job.error_message,
+            "created_at": str(export_job.created_at) if export_job.created_at else None,
+            "completed_at": str(export_job.completed_at) if export_job.completed_at else None,
+            "download_url": f"/patient/export-treatment-history/{export_job.id}/download"
+            if export_job.status == "COMPLETED" and export_job.file_path
+            else None,
+        }, 200
+
+
+class PatientExportTreatmentHistoryDownload(Resource):
+    @jwt_required()
+    def get(self, job_id):
+        email = get_jwt_identity()
+        current_user = User.query.filter_by(email=email).first()
+
+        if not current_user or current_user.role != 3:
+            return {"message": "Only patient can download export"}, 403
+
+        patient_record = Patient.query.filter_by(email=current_user.email).first()
+        if not patient_record:
+            return {"message": "Patient record not found"}, 404
+
+        export_job = ExportJob.query.get(job_id)
+        if not export_job or export_job.patient_id != patient_record.id:
+            return {"message": "Export job not found"}, 404
+
+        if export_job.status != "COMPLETED" or not export_job.file_path:
+            return {"message": "Export file not ready"}, 400
+
+        if not os.path.exists(export_job.file_path):
+            return {"message": "Export file missing on server"}, 404
+
+        return send_file(export_job.file_path, as_attachment=True)
 
 
 class DoctorDashboard(Resource):
@@ -716,6 +826,9 @@ api.add_resource(DoctorDashboard, "/doctor/dashboard")
 api.add_resource(PatientAvailableSlots, "/patient/available-slots")
 api.add_resource(PatientBookSlot, "/patient/book-slot/<int:slot_id>")
 api.add_resource(PatientCancelAppointment, "/patient/cancel-slot/<int:booking_id>")
+api.add_resource(PatientExportTreatmentHistory, "/patient/export-treatment-history")
+api.add_resource(PatientExportTreatmentHistoryStatus, "/patient/export-treatment-history/<int:job_id>")
+api.add_resource(PatientExportTreatmentHistoryDownload, "/patient/export-treatment-history/<int:job_id>/download")
 api.add_resource(UpdateAppointmentStatus, "/update_status/<int:app_id>")
 api.add_resource(DoctorAddTreatment, "/doctor/add-treatment/<int:booking_id>")
 api.add_resource(DoctorPatientHistory, "/doctor/patient-history/<int:pat_id>")
