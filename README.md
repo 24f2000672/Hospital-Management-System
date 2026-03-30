@@ -1,30 +1,101 @@
-# MAD 2 Project
-# To open out folder in vs code:
-    go to the root folder,go inside,rightclick and give open terminal and give command:
-        code.
+# Hospital Management System
 
-# command to run backend:
-    Create cirtual environment with name mad2venv using 
-        python -m venv mad2venv
-    to Activate :
-        # on Linux/macOS
-        source mad2venv/bin/activate
-        # (or ./mad2venv/bin/activate)
-    create requirements file and to update it use:
-        pip freeze > requirements.txt
-    install all requirements
-        pip install flask-restful
-        pip install -r requirements.txt
-        pip install flask_sqlalchemy
-to return to main forlder use cd..
+This project is a full-stack Hospital Management System with:
 
-# Day 2:
-1.Used JWS tokens and authentication
-2.Provided role based access for admin,doctor and patient
-3.For npm,after downloading node.js do this 
-    i.npm create vue@latest and answer all questions
-    ii.afterthat locate to frontend folder and give command to run frontend:
-        cd frontend
-        npm install
-        npm run format
-        npm run dev
+- Backend: Flask + Flask-RESTful + SQLAlchemy + JWT
+- Frontend: Vue 3 + Vite + Bootstrap
+
+It supports role-based access for Admin, Doctor, and Patient.
+
+## Project Structure
+
+- `backend/` contains the Flask API and database models.
+- `frontend/` contains the Vue application.
+
+## Prerequisites
+
+- Python 3.10+ (3.12 works)
+- Node.js 18+ and npm
+
+## Backend Setup
+
+1. Move to the backend folder:
+
+    ```bash
+    cd backend
+    ```
+
+2. Create a virtual environment (if needed):
+
+    ```bash
+    python -m venv mad2venv
+    ```
+
+3. Activate the virtual environment:
+
+    ```bash
+    source mad2venv/bin/activate
+    ```
+
+4. Install dependencies:
+
+    ```bash
+    pip install -r requirements.txt
+    ```
+
+5. Run the backend server:
+
+    ```bash
+    python app.py
+    ```
+
+The backend runs on `http://127.0.0.1:5000`.
+
+## Frontend Setup
+
+1. Open a new terminal and move to frontend:
+
+    ```bash
+    cd frontend
+    ```
+
+2. Install dependencies:
+
+    ```bash
+    npm install
+    ```
+
+3. Start the development server:
+
+    ```bash
+    npm run dev
+    ```
+
+The frontend usually runs on `http://localhost:5173`.
+
+## Authentication and Roles
+
+- JWT authentication is enabled.
+- Role-based dashboards:
+  - Admin
+  - Doctor
+  - Patient
+
+When the backend starts for the first time, it creates a default admin user:
+
+- Email: `Admin@123`
+- Password: `hospiadmin123`
+
+## Useful Notes
+
+- If you run commands from the project root, the backend venv path is:
+
+  ```bash
+  source backend/mad2venv/bin/activate
+  ```
+
+- To regenerate Python requirements after new installs:
+
+  ```bash
+  pip freeze > requirements.txt
+  ```

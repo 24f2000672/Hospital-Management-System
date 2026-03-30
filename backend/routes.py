@@ -595,14 +595,13 @@ class DoctorManageSlots(Resource):
             return {"message": "Unauthorized doctor id"}, 403
 
         today = date.today()
-        tomorrow = today + timedelta(days=1)
         next_week = today + timedelta(days=7)
 
         slots_query = (
             Appointment.query
             .filter(
                 Appointment.doctor_id == doc_id,
-                Appointment.date >= tomorrow,
+                Appointment.date >= today,
                 Appointment.date <= next_week,
             )
             .order_by(Appointment.date, Appointment.time)
@@ -619,7 +618,7 @@ class DoctorManageSlots(Resource):
             for a in slots_query
         ]
 
-        dates = [str(tomorrow + timedelta(days=i)) for i in range(7)]
+        dates = [str(today + timedelta(days=i)) for i in range(8)]
 
         return {
             "doc_id": doc_id,
