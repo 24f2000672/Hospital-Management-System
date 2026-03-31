@@ -6,7 +6,7 @@ from sqlalchemy import and_
 
 from celery_app import celery
 from models import db, Appointment, Doctor, Patient, Treatment, ExportJob, NotificationLog
-from mail import send_email
+from mail import send_email, is_valid_email
 
 
 def _ensure_dir(path):
@@ -36,6 +36,8 @@ def _month_window_for_previous_month(ref_date=None):
 @celery.task(name="tasks.send_same_day_appointment_reminders")
 def send_same_day_appointment_reminders():
     today = date.today()
+    reminder_days_ahead = int(os.getenv("REMINDER_DAYS_AHEAD", "1"))
+    target_date = today + timedelta(days=reminder_days_ahead)
 
     booked = (
         db.session.query(Appointment, Doctor, Patient)
@@ -43,7 +45,7 @@ def send_same_day_appointment_reminders():
         .join(Patient, Appointment.patient_id == Patient.id)
         .filter(
             and_(
-                Appointment.date == today,
+                Appointment.date == target_date,
                 Appointment.status == "Booked",
                 Appointment.patient_id.isnot(None),
             )
@@ -53,23 +55,45 @@ def send_same_day_appointment_reminders():
     )
 
     count = 0
+    emails_sent = 0
+    emails_failed = 0
+    skipped_invalid_emails = 0
     for appointment, doctor, patient in booked:
+        day_text = "today" if reminder_days_ahead == 0 else f"on {appointment.date}"
         msg = (
-            f"Reminder: You have an appointment today at {appointment.time.strftime('%H:%M')} "
+            f"Reminder: You have an appointment {day_text} at {appointment.time.strftime('%H:%M')} "
             f"with Dr. {doctor.first_name} {doctor.last_name}."
         )
 
         # Channel placeholders: wire real providers here (SMTP/GChat webhook/SMS gateway).
-        if patient.email:
-            send_email("Appointment Reminder", f"<p>{msg}</p>", patient.email, msg)
-            _log_notification(patient.email, "email", "Appointment Reminder", msg)
+        valid_email = is_valid_email(patient.email)
+        if valid_email:
+            email_sent = send_email("Appointment Reminder", f"<p>{msg}</p>", patient.email, msg)
+            if email_sent:
+                _log_notification(patient.email, "email", "Appointment Reminder", msg)
+                emails_sent += 1
+            else:
+                emails_failed += 1
+        elif patient.email:
+            skipped_invalid_emails += 1
+            print(
+                f"[EMAIL] Skipping patient_id={patient.id}. Invalid email value: {patient.email}"
+            )
         if patient.phone:
             _log_notification(patient.phone, "sms", "Appointment Reminder", msg)
-        if patient.email:
+        if valid_email:
             _log_notification(patient.email, "gchat", "Appointment Reminder", msg)
         count += 1
 
-    return {"date": str(today), "patients_notified": count}
+    return {
+        "run_date": str(today),
+        "target_appointment_date": str(target_date),
+        "reminder_days_ahead": reminder_days_ahead,
+        "patients_notified": count,
+        "emails_sent": emails_sent,
+        "emails_failed": emails_failed,
+        "invalid_emails_skipped": skipped_invalid_emails,
+    }
 
 
 @celery.task(name="tasks.generate_monthly_doctor_reports")
@@ -139,19 +163,20 @@ def generate_monthly_doctor_reports():
                 f"<p>Your monthly report for <strong>{month_label}</strong> is ready.</p>"
                 f"<p>Report path: {report_path}</p>"
             )
-            send_email(
+            email_sent = send_email(
                 f"Monthly report generated ({month_label})",
                 email_body,
                 doctor.email,
                 f"Your monthly report is ready: {report_path}",
             )
-            _log_notification(
-                doctor.email,
-                "email",
-                f"Monthly report generated ({month_label})",
-                f"Report ready at: {report_path}",
-            )
-            doctors_notified += 1
+            if email_sent:
+                _log_notification(
+                    doctor.email,
+                    "email",
+                    f"Monthly report generated ({month_label})",
+                    f"Report ready at: {report_path}",
+                )
+                doctors_notified += 1
         generated += 1
 
     return {
@@ -228,18 +253,19 @@ def export_treatment_history_csv(export_job_id):
                 "<p>Your treatment history export is completed.</p>"
                 f"<p>Job ID: {job.id}</p>"
             )
-            send_email(
+            email_sent = send_email(
                 "Treatment history export completed",
                 email_body,
                 patient.email,
                 f"Your CSV export is ready. Job ID: {job.id}",
             )
-            _log_notification(
-                patient.email,
-                "email",
-                "Treatment history export completed",
-                f"Your CSV export is ready. Job ID: {job.id}",
-            )
+            if email_sent:
+                _log_notification(
+                    patient.email,
+                    "email",
+                    "Treatment history export completed",
+                    f"Your CSV export is ready. Job ID: {job.id}",
+                )
 
         return {"job_id": job.id, "status": job.status, "file_path": file_path}
     except Exception as exc:

@@ -1,7 +1,11 @@
 import os
 import smtplib
+import re
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+
+
+EMAIL_REGEX = re.compile(r"^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$")
 
 
 def _as_bool(value, default=False):
@@ -10,7 +14,17 @@ def _as_bool(value, default=False):
     return str(value).strip().lower() in {"1", "true", "yes", "y", "on"}
 
 
+def is_valid_email(value):
+    if not value:
+        return False
+    return EMAIL_REGEX.fullmatch(str(value).strip()) is not None
+
+
 def send_email(subject, html_body, to_email, text_body=None):
+    if not is_valid_email(to_email):
+        print(f"[EMAIL] Skipping send. Invalid recipient email: {to_email}")
+        return False
+
     smtp_host = os.getenv("SMTP_HOST")
     smtp_port = int(os.getenv("SMTP_PORT", "587"))
     smtp_user = os.getenv("SMTP_USER")

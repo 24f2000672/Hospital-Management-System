@@ -7,6 +7,49 @@ This project is a full-stack Hospital Management System with:
 
 It supports role-based access for Admin, Doctor, and Patient.
 
+## Quick Start (Copy-paste these in 4 terminals)
+
+**Terminal 1 - Redis:**
+```bash
+redis-server --daemonize yes && redis-cli ping
+```
+
+**Terminal 2 - Backend API:**
+```bash
+cd /workspaces/Hospital-Management-System/backend
+source mad2venv/bin/activate
+python app.py
+```
+Backend runs on `http://127.0.0.1:5000`
+
+**Terminal 3 - Frontend Dashboard:**
+```bash
+cd /workspaces/Hospital-Management-System/frontend
+npm run dev
+```
+Frontend runs on `http://localhost:5173`
+
+**Terminal 4 - Celery Worker + Beat (for daily email reminders):**
+```bash
+cd /workspaces/Hospital-Management-System/backend
+source mad2venv/bin/activate
+export SMTP_HOST=127.0.0.1
+export SMTP_PORT=1025
+export SMTP_FROM_EMAIL=admin@hospital.local
+export SMTP_USE_TLS=false
+docker start mailhog || docker run -d --name mailhog -p 1025:1025 -p 8025:8025 mailhog/mailhog
+celery -A celery_app.celery worker --loglevel=info
+```
+In another backend terminal:
+```bash
+cd /workspaces/Hospital-Management-System/backend
+source mad2venv/bin/activate
+celery -A celery_app.celery beat --loglevel=info
+```
+
+**View captured emails at:** `http://127.0.0.1:8025`
+**Login:** Admin@123 / hospiadmin123
+
 ## Project Structure
 
 - `backend/` contains the Flask API and database models.
@@ -140,35 +183,70 @@ From `backend/` in a separate terminal:
 celery -A celery_app.celery beat --loglevel=info
 ```
 
-### Scheduled Jobs
+### Automatic Daily Appointment Reminders
 
-- Daily reminder job: `tasks.send_same_day_appointment_reminders` (8:00 AM)
-- Monthly report job: `tasks.generate_monthly_doctor_reports` (1st day, 2:00 AM)
+To send appointment reminders automatically every day:
 
-Set custom reminder time (optional):
+1. Start the Celery worker (processes jobs):
+   ```bash
+   cd backend
+   source mad2venv/bin/activate
+   celery -A celery_app.celery worker --loglevel=info
+   ```
 
-```bash
-export DAILY_REMINDER_HOUR=9
-export DAILY_REMINDER_MINUTE=30
-```
+2. Start the Celery beat scheduler (triggers jobs on schedule):
+   ```bash
+   cd backend
+   source mad2venv/bin/activate
+   celery -A celery_app.celery beat --loglevel=info
+   ```
 
-This runs the daily reminder every day at 09:30 in `CELERY_TIMEZONE`.
+3. (Optional) Configure SMTP and reminder time:
+   ```bash
+   export SMTP_HOST=127.0.0.1
+   export SMTP_PORT=1025
+   export SMTP_FROM_EMAIL=admin@hospital.local
+   export DAILY_REMINDER_HOUR=8
+   export DAILY_REMINDER_MINUTE=0
+   export REMINDER_DAYS_AHEAD=1
+   ```
 
-### SMTP Email Configuration (Optional but Recommended)
+**Scheduled Jobs**
 
-To send real emails from reminder/report/export jobs, set these environment variables before starting worker/beat:
+- Daily reminder job: `tasks.send_same_day_appointment_reminders` (every day at 8:00 AM)
+  - Sends emails to patients with appointments **tomorrow** (default: `REMINDER_DAYS_AHEAD=1`)
+  - Change to `REMINDER_DAYS_AHEAD=0` for today's appointments
+- Monthly report job: `tasks.generate_monthly_doctor_reports` (1st of each month, 2:00 AM)
+
+### SMTP Email Configuration for Daily Reminders
+
+To send real emails from reminder jobs, set before starting worker/beat:
 
 ```bash
 export SMTP_HOST=smtp.gmail.com
 export SMTP_PORT=587
-export SMTP_USER=your_email@example.com
+export SMTP_USER=admin@example.com
 export SMTP_PASSWORD=your_app_password
-export SMTP_FROM_EMAIL=your_email@example.com
+export SMTP_FROM_EMAIL=admin@example.com
 export SMTP_USE_TLS=true
 export SMTP_USE_SSL=false
 ```
 
-If SMTP variables are not configured, the app will skip actual email sending and still log notifications in the database.
+Or use MailHog (fake inbox for testing):
+
+```bash
+# Start MailHog
+docker run -d --name mailhog -p 1025:1025 -p 8025:8025 mailhog/mailhog
+
+# Set SMTP to MailHog
+export SMTP_HOST=127.0.0.1
+export SMTP_PORT=1025
+export SMTP_FROM_EMAIL=admin@hospital.local
+export SMTP_USE_TLS=false
+export SMTP_USE_SSL=false
+```
+
+View captured emails at `http://127.0.0.1:8025`
 
 Monthly reports are generated under:
 
