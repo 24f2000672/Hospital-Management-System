@@ -1,4 +1,5 @@
 import csv
+import html
 import os
 from datetime import date, datetime, timedelta
 from collections import Counter
@@ -111,7 +112,9 @@ def generate_monthly_doctor_reports():
 
     for doctor in doctors:
         appointments = (
-            Appointment.query.filter(
+            db.session.query(Appointment, Patient)
+            .outerjoin(Patient, Appointment.patient_id == Patient.id)
+            .filter(
                 Appointment.doctor_id == doctor.id,
                 Appointment.date >= start_date,
                 Appointment.date < end_date,
@@ -133,28 +136,62 @@ def generate_monthly_doctor_reports():
 
         diagnosis_counts = Counter([t.diagnosis or "Unknown" for t in treatments])
 
+        appointment_map = {
+            a.id: (a, p)
+            for a, p in appointments
+        }
+
         report_path = os.path.join(reports_root, f"doctor_{doctor.id}_{month_label}.html")
         with open(report_path, "w", encoding="utf-8") as f:
             f.write("<html><head><title>Monthly Doctor Report</title></head><body>")
             f.write(f"<h1>Monthly Report - {month_label}</h1>")
-            f.write(f"<h2>Doctor: {doctor.first_name} {doctor.last_name}</h2>")
+            f.write(f"<h2>Doctor: {html.escape(doctor.first_name)} {html.escape(doctor.last_name)}</h2>")
             f.write(f"<p>Total appointments: {len(appointments)}</p>")
             f.write(f"<p>Total treatments: {len(treatments)}</p>")
 
             f.write("<h3>Diagnosis Summary</h3><ul>")
             if diagnosis_counts:
                 for diagnosis, count in diagnosis_counts.items():
-                    f.write(f"<li>{diagnosis}: {count}</li>")
+                    f.write(f"<li>{html.escape(diagnosis)}: {count}</li>")
             else:
                 f.write("<li>No diagnosis records in this month.</li>")
             f.write("</ul>")
 
             f.write("<h3>Appointments</h3><table border='1' cellpadding='6'>")
-            f.write("<tr><th>ID</th><th>Date</th><th>Time</th><th>Status</th></tr>")
-            for a in appointments:
+            f.write("<tr><th>ID</th><th>Date</th><th>Time</th><th>Status</th><th>Patient</th></tr>")
+            for a, p in appointments:
+                patient_name = f"{p.first_name} {p.last_name}" if p else "Unassigned"
                 f.write(
-                    f"<tr><td>{a.id}</td><td>{a.date}</td><td>{a.time}</td><td>{a.status}</td></tr>"
+                    f"<tr><td>{a.id}</td><td>{a.date}</td><td>{a.time}</td><td>{html.escape(a.status or '')}</td><td>{html.escape(patient_name)}</td></tr>"
                 )
+            f.write("</table>")
+
+            f.write("<h3>Treatments</h3><table border='1' cellpadding='6'>")
+            f.write(
+                "<tr><th>Treatment ID</th><th>Appointment ID</th><th>Date</th><th>Patient</th><th>Diagnosis</th><th>Prescription</th><th>Progress</th><th>Notes</th></tr>"
+            )
+            if treatments:
+                for t in treatments:
+                    appt, patient = appointment_map.get(t.appointment_id, (None, None))
+                    appt_date = str(appt.date) if appt else "-"
+                    patient_name = (
+                        f"{patient.first_name} {patient.last_name}" if patient else "Unassigned"
+                    )
+
+                    f.write(
+                        "<tr>"
+                        f"<td>{t.id}</td>"
+                        f"<td>{t.appointment_id}</td>"
+                        f"<td>{appt_date}</td>"
+                        f"<td>{html.escape(patient_name)}</td>"
+                        f"<td>{html.escape(t.diagnosis or '')}</td>"
+                        f"<td>{html.escape(t.prescription or '')}</td>"
+                        f"<td>{html.escape(t.progress or '')}</td>"
+                        f"<td>{html.escape(t.notes or '')}</td>"
+                        "</tr>"
+                    )
+            else:
+                f.write("<tr><td colspan='8'>No treatments recorded in this month.</td></tr>")
             f.write("</table>")
             f.write("</body></html>")
 

@@ -7,7 +7,7 @@ This project is a full-stack Hospital Management System with:
 
 It supports role-based access for Admin, Doctor, and Patient.
 
-## Quick Start (Copy-paste these in 4 terminals)
+## Quick Start (Copy-paste these in 5 terminals)
 
 **Terminal 1 - Redis:**
 ```bash
@@ -29,7 +29,7 @@ npm run dev
 ```
 Frontend runs on `http://localhost:5173`
 
-**Terminal 4 - Celery Worker + Beat (for daily email reminders):**
+**Terminal 4 - Celery Worker (for daily email reminders):**
 ```bash
 cd /workspaces/Hospital-Management-System/backend
 source mad2venv/bin/activate
@@ -40,7 +40,7 @@ export SMTP_USE_TLS=false
 docker start mailhog || docker run -d --name mailhog -p 1025:1025 -p 8025:8025 mailhog/mailhog
 celery -A celery_app.celery worker --loglevel=info
 ```
-In another backend terminal:
+**Terminal 5 - Celery Beat (scheduler):**
 ```bash
 cd /workspaces/Hospital-Management-System/backend
 source mad2venv/bin/activate

@@ -1,10 +1,14 @@
 from datetime import date, datetime, time, timedelta
+from collections import Counter
+import glob
+import html
 import os
 from flask import request, send_file
 from flask_restful import Api, Resource
 from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity
 from sqlalchemy import distinct, or_
 from models import User, db, Patient, Doctor, Department, Appointment, Treatment, ExportJob
+from cache import cache_response, invalidate_cache
 
 api = Api()
 
@@ -35,6 +39,116 @@ SLOT_LABELS = {
     "21:00": "09:00 PM",
     "22:00": "10:00 PM",
 }
+
+
+def _month_window_from_label(month_label):
+    try:
+        first_day = datetime.strptime(month_label, "%Y-%m").date()
+    except ValueError:
+        return None, None
+
+    if first_day.month == 12:
+        next_month = date(first_day.year + 1, 1, 1)
+    else:
+        next_month = date(first_day.year, first_day.month + 1, 1)
+    return first_day, next_month
+
+
+def _build_doctor_monthly_report(doctor_id, month_label):
+    start_date, end_date = _month_window_from_label(month_label)
+    if not start_date or not end_date:
+        return None
+
+    doctor = Doctor.query.get(doctor_id)
+    if not doctor:
+        return None
+
+    reports_root = os.path.join("instance", "reports", month_label)
+    os.makedirs(reports_root, exist_ok=True)
+
+    appointments = (
+        db.session.query(Appointment, Patient)
+        .outerjoin(Patient, Appointment.patient_id == Patient.id)
+        .filter(
+            Appointment.doctor_id == doctor.id,
+            Appointment.date >= start_date,
+            Appointment.date < end_date,
+        )
+        .order_by(Appointment.date, Appointment.time)
+        .all()
+    )
+
+    treatments = (
+        db.session.query(Treatment)
+        .join(Appointment, Treatment.appointment_id == Appointment.id)
+        .filter(
+            Appointment.doctor_id == doctor.id,
+            Appointment.date >= start_date,
+            Appointment.date < end_date,
+        )
+        .all()
+    )
+
+    diagnosis_counts = Counter([t.diagnosis or "Unknown" for t in treatments])
+    appointment_map = {a.id: (a, p) for a, p in appointments}
+    report_path = os.path.join(reports_root, f"doctor_{doctor.id}_{month_label}.html")
+
+    with open(report_path, "w", encoding="utf-8") as f:
+        f.write("<html><head><title>Monthly Doctor Report</title></head><body>")
+        f.write(f"<h1>Monthly Report - {month_label}</h1>")
+        f.write(f"<h2>Doctor: {html.escape(doctor.first_name)} {html.escape(doctor.last_name)}</h2>")
+        f.write(f"<p>Total appointments: {len(appointments)}</p>")
+        f.write(f"<p>Total treatments: {len(treatments)}</p>")
+
+        f.write("<h3>Diagnosis Summary</h3><ul>")
+        if diagnosis_counts:
+            for diagnosis, count in sorted(diagnosis_counts.items(), key=lambda x: x[0].lower()):
+                f.write(f"<li>{html.escape(diagnosis)}: {count}</li>")
+        else:
+            f.write("<li>No diagnosis records in this month.</li>")
+        f.write("</ul>")
+
+        f.write("<h3>Appointments</h3><table border='1' cellpadding='6'>")
+        f.write("<tr><th>ID</th><th>Date</th><th>Time</th><th>Status</th><th>Patient</th></tr>")
+        for a, p in appointments:
+            patient_name = f"{p.first_name} {p.last_name}" if p else "Unassigned"
+            f.write(
+                f"<tr><td>{a.id}</td><td>{a.date}</td><td>{a.time}</td><td>{html.escape(a.status or '')}</td><td>{html.escape(patient_name)}</td></tr>"
+            )
+        f.write("</table>")
+
+        f.write("<h3>Treatments</h3><table border='1' cellpadding='6'>")
+        f.write(
+            "<tr><th>Treatment ID</th><th>Appointment ID</th><th>Date</th><th>Patient</th><th>Diagnosis</th><th>Prescription</th><th>Progress</th><th>Notes</th></tr>"
+        )
+        if treatments:
+            for t in treatments:
+                appt, patient = appointment_map.get(t.appointment_id, (None, None))
+                appt_date = str(appt.date) if appt else "-"
+                patient_name = f"{patient.first_name} {patient.last_name}" if patient else "Unassigned"
+
+                f.write(
+                    "<tr>"
+                    f"<td>{t.id}</td>"
+                    f"<td>{t.appointment_id}</td>"
+                    f"<td>{appt_date}</td>"
+                    f"<td>{html.escape(patient_name)}</td>"
+                    f"<td>{html.escape(t.diagnosis or '')}</td>"
+                    f"<td>{html.escape(t.prescription or '')}</td>"
+                    f"<td>{html.escape(t.progress or '')}</td>"
+                    f"<td>{html.escape(t.notes or '')}</td>"
+                    "</tr>"
+                )
+        else:
+            f.write("<tr><td colspan='8'>No treatments recorded in this month.</td></tr>")
+        f.write("</table>")
+        f.write("</body></html>")
+
+    return {
+        "report_path": report_path,
+        "appointments": len(appointments),
+        "treatments": len(treatments),
+    }
 
 #login and signup routes
 class Login(Resource):
@@ -239,6 +353,7 @@ class PatientDashboard(Resource):
 
 class PatientAvailableSlots(Resource):
     @jwt_required()
+    @cache_response(ttl=600, prefix='available_slots', user_specific=True)
     def get(self):
         email = get_jwt_identity()
         current_user = User.query.filter_by(email=email).first()
@@ -298,6 +413,10 @@ class PatientBookSlot(Resource):
         slot.patient_id = patient_record.id
         slot.status = "Booked"
         db.session.commit()
+        
+        # Invalidate available slots cache since availability changed
+        invalidate_cache("available_slots:*")
+        
         return {"message": "Slot booked successfully"}, 200
 
 
@@ -327,6 +446,10 @@ class PatientCancelAppointment(Resource):
         booking.patient_id = None
         booking.status = "Available"
         db.session.commit()
+        
+        # Invalidate available slots cache since availability changed
+        invalidate_cache("available_slots:*")
+        
         return {"message": "Appointment cancelled successfully"}, 200
 
 
@@ -522,6 +645,96 @@ class DoctorDashboard(Resource):
             "missing_dates": unconfigured_dates,
             "missing_availability_dates": unconfigured_dates,
         }, 200
+
+
+class DoctorMonthlyReports(Resource):
+    @jwt_required()
+    def get(self):
+        email = get_jwt_identity()
+        current_user = User.query.filter_by(email=email).first()
+
+        if not current_user or str(current_user.role) != "2":
+            return {"message": "Only doctor can access monthly reports"}, 403
+
+        doctor_record = Doctor.query.filter_by(email=current_user.email).first()
+        if not doctor_record:
+            return {"message": "Doctor record not found"}, 404
+
+        pattern = os.path.join("instance", "reports", "*", f"doctor_{doctor_record.id}_*.html")
+        report_files = sorted(glob.glob(pattern), reverse=True)
+
+        reports = []
+        for path in report_files:
+            filename = os.path.basename(path)
+            month_label = filename.replace(f"doctor_{doctor_record.id}_", "").replace(".html", "")
+            try:
+                datetime.strptime(month_label, "%Y-%m")
+            except ValueError:
+                continue
+
+            reports.append({
+                "month": month_label,
+                "filename": filename,
+                "generated_at": datetime.fromtimestamp(os.path.getmtime(path)).isoformat(),
+                "download_url": f"/doctor/monthly-reports/{month_label}/download",
+            })
+
+        return {"reports": reports}, 200
+
+    @jwt_required()
+    def post(self):
+        email = get_jwt_identity()
+        current_user = User.query.filter_by(email=email).first()
+
+        if not current_user or str(current_user.role) != "2":
+            return {"message": "Only doctor can export monthly reports"}, 403
+
+        doctor_record = Doctor.query.filter_by(email=current_user.email).first()
+        if not doctor_record:
+            return {"message": "Doctor record not found"}, 404
+
+        data = request.get_json() or {}
+        month_label = str(data.get("month", "")).strip()
+        if not month_label:
+            first_of_current = date.today().replace(day=1)
+            previous_month_date = first_of_current - timedelta(days=1)
+            month_label = previous_month_date.strftime("%Y-%m")
+
+        result = _build_doctor_monthly_report(doctor_record.id, month_label)
+        if not result:
+            return {"message": "Invalid month format. Use YYYY-MM"}, 400
+
+        return {
+            "message": "Monthly report generated",
+            "month": month_label,
+            "appointments": result["appointments"],
+            "treatments": result["treatments"],
+            "download_url": f"/doctor/monthly-reports/{month_label}/download",
+        }, 201
+
+
+class DoctorMonthlyReportDownload(Resource):
+    @jwt_required()
+    def get(self, month_label):
+        email = get_jwt_identity()
+        current_user = User.query.filter_by(email=email).first()
+
+        if not current_user or str(current_user.role) != "2":
+            return {"message": "Only doctor can download monthly reports"}, 403
+
+        doctor_record = Doctor.query.filter_by(email=current_user.email).first()
+        if not doctor_record:
+            return {"message": "Doctor record not found"}, 404
+
+        start_date, end_date = _month_window_from_label(month_label)
+        if not start_date or not end_date:
+            return {"message": "Invalid month format. Use YYYY-MM"}, 400
+
+        report_path = os.path.join("instance", "reports", month_label, f"doctor_{doctor_record.id}_{month_label}.html")
+        if not os.path.exists(report_path):
+            return {"message": "Report not found for requested month"}, 404
+
+        return send_file(report_path, as_attachment=True)
 
 
 class UpdateAppointmentStatus(Resource):
@@ -834,6 +1047,8 @@ api.add_resource(DoctorAddTreatment, "/doctor/add-treatment/<int:booking_id>")
 api.add_resource(DoctorPatientHistory, "/doctor/patient-history/<int:pat_id>")
 api.add_resource(DoctorManageSlots, "/doctor/slots/<int:doc_id>")
 api.add_resource(DoctorCancelSlot, "/doctor/slots/cancel/<int:slot_id>")
+api.add_resource(DoctorMonthlyReports, "/doctor/monthly-reports")
+api.add_resource(DoctorMonthlyReportDownload, "/doctor/monthly-reports/<string:month_label>/download")
 
 #admin route to add doctor and department, only admin can access this route
 class AddDoctor(Resource):
@@ -878,6 +1093,10 @@ class AddDoctor(Resource):
         )
         db.session.add(new_doctor)
         db.session.commit()
+        
+        # Invalidate search cache since new doctor was added
+        invalidate_cache("search:*")
+        
         return {"message": "Doctor added successfully"}, 201
 
 api.add_resource(AddDoctor, "/add_doctor")
@@ -913,6 +1132,10 @@ class UpdateDoctor(Resource):
             doctor.department_id = dept.id
 
         db.session.commit()
+        
+        # Invalidate search cache since doctor was updated
+        invalidate_cache("search:*")
+        
         return {"message": "Doctor updated successfully"}, 200
 api.add_resource(UpdateDoctor, "/update_doctor/<int:doctor_id>")
 
@@ -1027,6 +1250,10 @@ class UpdatePatient(Resource):
         patient.dob = data.get("dob", patient.dob)
         patient.insurance = data.get("insurance", patient.insurance)
         db.session.commit()
+        
+        # Invalidate search cache since patient was updated
+        invalidate_cache("search:*")
+        
         return {"message": "Patient updated successfully"}, 200
 api.add_resource(UpdatePatient, "/update_patient/<int:patient_id>")
 
@@ -1122,6 +1349,7 @@ api.add_resource(RemoveBlacklistPatient, "/remove_blacklist_patient/<int:patient
 #api for searching doctors by name or department and search patient by name or email, only admin can access this route
 class Search(Resource):
     @jwt_required()
+    @cache_response(ttl=900, prefix='search', user_specific=True)
     def get(self):
         email = get_jwt_identity()
         current_user = User.query.filter_by(email=email).first()

@@ -4,6 +4,7 @@ import models as models
 import os
 from flask_jwt_extended import JWTManager
 from flask_cors import CORS
+from cache import init_redis
 
 def create_app():
     app = Flask(__name__)
@@ -26,6 +27,10 @@ CORS(app, resources={r"/*": {"origins": [
     "*"
 ]}}, supports_credentials=True)
 models.db.init_app(app)
+
+# Initialize Redis for API caching
+init_redis(app)
+
 jwt = JWTManager(app)
 from routes import api
 api.init_app(app)

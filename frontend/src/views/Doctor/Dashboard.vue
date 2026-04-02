@@ -181,6 +181,48 @@
           <p v-else class="text-success">All slots created for next week.</p>
         </div>
       </div>
+
+      <!-- Monthly Reports -->
+      <div class="card shadow mb-4">
+        <div class="card-header bg-info text-white d-flex justify-content-between align-items-center">
+          <h4 class="mb-0">Monthly Reports</h4>
+          <small>Auto job runs on 1st of every month</small>
+        </div>
+        <div class="card-body">
+          <div class="row g-2 align-items-end mb-3">
+            <div class="col-md-4">
+              <label class="form-label">Report Month</label>
+              <input v-model="reportMonth" type="month" class="form-control" />
+            </div>
+            <div class="col-md-4">
+              <button class="btn btn-primary" :disabled="exportingReport" @click="generateMonthlyReport">
+                {{ exportingReport ? 'Generating...' : 'Export Report' }}
+              </button>
+            </div>
+          </div>
+
+          <p v-if="reportMessage" class="text-success mb-3">{{ reportMessage }}</p>
+
+          <template v-if="monthlyReports.length">
+            <ul class="list-group">
+              <li
+                v-for="report in monthlyReports"
+                :key="report.month"
+                class="list-group-item d-flex justify-content-between align-items-center"
+              >
+                <div>
+                  <strong>{{ formatMonth(report.month) }}</strong>
+                  <div class="small text-muted">Generated: {{ formatDateTime(report.generated_at) }}</div>
+                </div>
+                <button class="btn btn-outline-primary btn-sm" @click="downloadMonthlyReport(report.month)">
+                  Download HTML
+                </button>
+              </li>
+            </ul>
+          </template>
+          <p v-else class="mb-0">No monthly reports yet. Export one to get started.</p>
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -198,6 +240,10 @@ export default {
       assignedPatients: [],
       missingDates: [],
       docId: null,
+      reportMonth: '',
+      monthlyReports: [],
+      exportingReport: false,
+      reportMessage: '',
     }
   },
   methods: {
@@ -207,6 +253,25 @@ export default {
     logout() {
       localStorage.removeItem('access_token')
       this.$router.push('/login')
+    },
+    getDefaultReportMonth() {
+      const now = new Date()
+      now.setDate(1)
+      now.setMonth(now.getMonth() - 1)
+      const year = now.getFullYear()
+      const month = String(now.getMonth() + 1).padStart(2, '0')
+      return `${year}-${month}`
+    },
+    formatMonth(monthLabel) {
+      const [year, month] = monthLabel.split('-')
+      const d = new Date(Number(year), Number(month) - 1, 1)
+      return d.toLocaleString(undefined, { month: 'long', year: 'numeric' })
+    },
+    formatDateTime(value) {
+      if (!value) return '-'
+      const d = new Date(value)
+      if (Number.isNaN(d.getTime())) return value
+      return d.toLocaleString()
     },
     async loadDashboard() {
       const token = localStorage.getItem('access_token')
@@ -245,6 +310,63 @@ export default {
         alert('Unable to load dashboard data.')
       }
     },
+    async loadMonthlyReports() {
+      try {
+        const token = localStorage.getItem('access_token')
+        const resp = await axios.get('http://127.0.0.1:5000/doctor/monthly-reports', {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        this.monthlyReports = resp.data.reports || []
+      } catch (err) {
+        console.error(err)
+      }
+    },
+    async generateMonthlyReport() {
+      try {
+        this.exportingReport = true
+        this.reportMessage = ''
+        const token = localStorage.getItem('access_token')
+        const month = this.reportMonth || this.getDefaultReportMonth()
+        const resp = await axios.post(
+          'http://127.0.0.1:5000/doctor/monthly-reports',
+          { month },
+          { headers: { Authorization: `Bearer ${token}` } },
+        )
+        this.reportMessage = `Report for ${this.formatMonth(resp.data.month)} is ready.`
+        await this.loadMonthlyReports()
+      } catch (err) {
+        console.error(err)
+        const backendMsg = err?.response?.data?.message
+        alert(backendMsg || 'Failed to generate monthly report.')
+      } finally {
+        this.exportingReport = false
+      }
+    },
+    async downloadMonthlyReport(month) {
+      try {
+        const token = localStorage.getItem('access_token')
+        const resp = await axios.get(
+          `http://127.0.0.1:5000/doctor/monthly-reports/${month}/download`,
+          {
+            headers: { Authorization: `Bearer ${token}` },
+            responseType: 'blob',
+          },
+        )
+
+        const url = window.URL.createObjectURL(new Blob([resp.data]))
+        const link = document.createElement('a')
+        link.href = url
+        link.setAttribute('download', `doctor_report_${month}.html`)
+        document.body.appendChild(link)
+        link.click()
+        link.remove()
+        window.URL.revokeObjectURL(url)
+      } catch (err) {
+        console.error(err)
+        const backendMsg = err?.response?.data?.message
+        alert(backendMsg || 'Unable to download report.')
+      }
+    },
     async changeStatus(appId, status) {
       try {
         const token = localStorage.getItem('access_token')
@@ -273,7 +395,9 @@ export default {
     },
   },
   mounted() {
+    this.reportMonth = this.getDefaultReportMonth()
     this.loadDashboard()
+    this.loadMonthlyReports()
   },
 }
 </script>
