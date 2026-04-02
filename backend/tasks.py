@@ -66,7 +66,7 @@ def send_same_day_appointment_reminders():
             f"with Dr. {doctor.first_name} {doctor.last_name}."
         )
 
-        # Channel placeholders: wire real providers here (SMTP/GChat webhook/SMS gateway).
+        # Only attempt to send email if patient has a valid email address. This prevents unnecessary SMTP errors and log noise.
         valid_email = is_valid_email(patient.email)
         if valid_email:
             email_sent = send_email("Appointment Reminder", f"<p>{msg}</p>", patient.email, msg)
@@ -99,7 +99,7 @@ def send_same_day_appointment_reminders():
 
 @celery.task(name="tasks.generate_monthly_doctor_reports")
 def generate_monthly_doctor_reports():
-    # Doctor-only monthly reporting job.
+    # Generate detailed monthly report for each doctor covering appointments, treatments, and diagnosis summary. This helps doctors review their monthly performance and patient outcomes. Report is saved as HTML file and doctor is notified via email with the report details.
     start_date, end_date = _month_window_for_previous_month()
     month_label = start_date.strftime("%Y-%m")
 

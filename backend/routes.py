@@ -218,10 +218,6 @@ class Signup(Resource):
 
         return {"message": "Signup successful"}, 201
 
-
-api.add_resource(Login, "/login")
-api.add_resource(Signup, "/signup")
-
 #Admin, Doctor and Patient Dashboard routes
 class AdminDashboard(Resource):
     @jwt_required()
@@ -413,8 +409,6 @@ class PatientBookSlot(Resource):
         slot.patient_id = patient_record.id
         slot.status = "Booked"
         db.session.commit()
-        
-        # Invalidate available slots cache since availability changed
         invalidate_cache("available_slots:*")
         
         return {"message": "Slot booked successfully"}, 200
@@ -446,8 +440,6 @@ class PatientCancelAppointment(Resource):
         booking.patient_id = None
         booking.status = "Available"
         db.session.commit()
-        
-        # Invalidate available slots cache since availability changed
         invalidate_cache("available_slots:*")
         
         return {"message": "Appointment cancelled successfully"}, 200
@@ -469,8 +461,6 @@ class PatientExportTreatmentHistory(Resource):
         export_job = ExportJob(patient_id=patient_record.id, status="PENDING")
         db.session.add(export_job)
         db.session.commit()
-
-        # Import inside method to avoid import cycle during app startup.
         from tasks import export_treatment_history_csv
 
         task = export_treatment_history_csv.delay(export_job.id)
@@ -503,7 +493,7 @@ class PatientExportTreatmentHistoryStatus(Resource):
         if not export_job or export_job.patient_id != patient_record.id:
             return {"message": "Export job not found"}, 404
 
-        # Reconcile DB status with Celery task state so UI does not spin forever.
+        # Check Celery task status if job is still in progress. This ensures we return updated status even if worker has completed the task but DB update is pending.
         if export_job.task_id and export_job.status in {"QUEUED", "RUNNING"}:
             from celery.result import AsyncResult
             from celery_app import celery
@@ -620,8 +610,7 @@ class DoctorDashboard(Resource):
         )
         assigned_patients = [{"Pat_id": p.id, "Name": f"{p.first_name} {p.last_name}", "Email": p.email} for p in assigned_query]
 
-        # dates in the next 7 days where no AVAILABLE slot exists.
-        # This powers the slot reminder shown on doctor dashboard.
+        # dates in the next 7 days where no AVAILABLE slot exists. This helps doctor to identify dates where they need to add availability.
         availability_dates_query = (
             db.session.query(distinct(Appointment.date))
             .filter(
@@ -1032,24 +1021,6 @@ class DoctorCancelSlot(Resource):
         return {"message": "Slot removed"}, 200
 
 
-api.add_resource(AdminDashboard, "/admin/dashboard")
-api.add_resource(PatientDashboard, "/patient/dashboard")
-api.add_resource(DoctorDashboard, "/doctor/dashboard")
-
-api.add_resource(PatientAvailableSlots, "/patient/available-slots")
-api.add_resource(PatientBookSlot, "/patient/book-slot/<int:slot_id>")
-api.add_resource(PatientCancelAppointment, "/patient/cancel-slot/<int:booking_id>")
-api.add_resource(PatientExportTreatmentHistory, "/patient/export-treatment-history")
-api.add_resource(PatientExportTreatmentHistoryStatus, "/patient/export-treatment-history/<int:job_id>")
-api.add_resource(PatientExportTreatmentHistoryDownload, "/patient/export-treatment-history/<int:job_id>/download")
-api.add_resource(UpdateAppointmentStatus, "/update_status/<int:app_id>")
-api.add_resource(DoctorAddTreatment, "/doctor/add-treatment/<int:booking_id>")
-api.add_resource(DoctorPatientHistory, "/doctor/patient-history/<int:pat_id>")
-api.add_resource(DoctorManageSlots, "/doctor/slots/<int:doc_id>")
-api.add_resource(DoctorCancelSlot, "/doctor/slots/cancel/<int:slot_id>")
-api.add_resource(DoctorMonthlyReports, "/doctor/monthly-reports")
-api.add_resource(DoctorMonthlyReportDownload, "/doctor/monthly-reports/<string:month_label>/download")
-
 #admin route to add doctor and department, only admin can access this route
 class AddDoctor(Resource):
     @jwt_required()
@@ -1093,13 +1064,10 @@ class AddDoctor(Resource):
         )
         db.session.add(new_doctor)
         db.session.commit()
-        
-        # Invalidate search cache since new doctor was added
         invalidate_cache("search:*")
         
         return {"message": "Doctor added successfully"}, 201
 
-api.add_resource(AddDoctor, "/add_doctor")
 #admin route to update doctor, only admin can access this route
 class UpdateDoctor(Resource):
     @jwt_required()
@@ -1132,12 +1100,9 @@ class UpdateDoctor(Resource):
             doctor.department_id = dept.id
 
         db.session.commit()
-        
-        # Invalidate search cache since doctor was updated
         invalidate_cache("search:*")
         
         return {"message": "Doctor updated successfully"}, 200
-api.add_resource(UpdateDoctor, "/update_doctor/<int:doctor_id>")
 
 #Api route to get doctor details by ID, only admin can access this route
 class GetDoctor(Resource):
@@ -1165,7 +1130,6 @@ class GetDoctor(Resource):
             "is_blacklisted": True if doctor.blacklisted == "Y" else False
         }, 200
 
-api.add_resource(GetDoctor, "/get_doctor/<int:doctor_id>")
 #Api route to delete doctor, only admin can access this route
 class DeleteDoctor(Resource):
     @jwt_required()
@@ -1187,7 +1151,7 @@ class DeleteDoctor(Resource):
         db.session.delete(doctor)
         db.session.commit()
         return {"message": "Doctor deleted successfully"}, 200
-api.add_resource(DeleteDoctor, "/delete_doctor/<int:doctor_id>")
+
 #admin route to blacklist doctor, only admin can access this route
 class BlacklistDoctor(Resource):
     @jwt_required()
@@ -1202,11 +1166,10 @@ class BlacklistDoctor(Resource):
         if not doctor:
             return {"message": "Doctor not found"}, 404
 
-        # set flag to 'Y'
         doctor.blacklisted = "Y"
         db.session.commit()
         return {"message": "Doctor blacklisted successfully"}, 200
-api.add_resource(BlacklistDoctor, "/blacklist_doctor/<int:doctor_id>")
+
 #admin route to remove doctor from blacklist, only admin can access this route
 class RemoveBlacklistDoctor(Resource):
     @jwt_required()
@@ -1221,11 +1184,11 @@ class RemoveBlacklistDoctor(Resource):
         if not doctor:
             return {"message": "Doctor not found"}, 404
 
-        # reset flag to 'N'
+        
         doctor.blacklisted = "N"
         db.session.commit()
         return {"message": "Doctor removed from blacklist successfully"}, 200
-api.add_resource(RemoveBlacklistDoctor, "/remove_blacklist_doctor/<int:doctor_id>")
+
 #admin route to update patient, only admin can access this route
 class UpdatePatient(Resource):
     @jwt_required()
@@ -1251,11 +1214,9 @@ class UpdatePatient(Resource):
         patient.insurance = data.get("insurance", patient.insurance)
         db.session.commit()
         
-        # Invalidate search cache since patient was updated
         invalidate_cache("search:*")
         
         return {"message": "Patient updated successfully"}, 200
-api.add_resource(UpdatePatient, "/update_patient/<int:patient_id>")
 
 #Api route to get patient details by ID, only admin can access this route
 class GetPatient(Resource):
@@ -1285,7 +1246,7 @@ class GetPatient(Resource):
             "is_blacklisted": True if patient.blacklisted == "Y" else False
         }, 200
 
-api.add_resource(GetPatient, "/get_patient/<int:patient_id>")
+
 #admin route to delete patient, only admin can access this route
 class DeletePatient(Resource):
     @jwt_required()
@@ -1307,7 +1268,7 @@ class DeletePatient(Resource):
         db.session.delete(patient)
         db.session.commit()
         return {"message": "Patient deleted successfully"}, 200
-api.add_resource(DeletePatient, "/delete_patient/<int:patient_id>")
+
 #admin route to blacklist patient, only admin can access this route
 class BlacklistPatient(Resource):
     @jwt_required()
@@ -1322,11 +1283,11 @@ class BlacklistPatient(Resource):
         if not patient:
             return {"message": "Patient not found"}, 404
 
-        # set flag to 'Y'
+        
         patient.blacklisted = "Y"
         db.session.commit()
         return {"message": "Patient blacklisted successfully"}, 200
-api.add_resource(BlacklistPatient, "/blacklist_patient/<int:patient_id>")
+
 #admin route to remove patient from blacklist, only admin can access this route
 class RemoveBlacklistPatient(Resource):
     @jwt_required()
@@ -1345,7 +1306,7 @@ class RemoveBlacklistPatient(Resource):
         patient.blacklisted = "N"
         db.session.commit()
         return {"message": "Patient removed from blacklist successfully"}, 200
-api.add_resource(RemoveBlacklistPatient, "/remove_blacklist_patient/<int:patient_id>")
+
 #api for searching doctors by name or department and search patient by name or email, only admin can access this route
 class Search(Resource):
     @jwt_required()
@@ -1377,4 +1338,35 @@ class Search(Resource):
         patients = [{"id": p.id, "first_name": p.first_name, "last_name": p.last_name, "email": p.email} for p in patient_results]
 
         return {"doctors": doctors, "patients": patients}, 200
+
+# all Api Routes
+api.add_resource(AdminDashboard, "/admin/dashboard")
+api.add_resource(PatientDashboard, "/patient/dashboard")
+api.add_resource(DoctorDashboard, "/doctor/dashboard")
+api.add_resource(Login, "/login")
+api.add_resource(Signup, "/signup")
+api.add_resource(AddDoctor, "/add_doctor")
+api.add_resource(UpdateDoctor, "/update_doctor/<int:doctor_id>")
+api.add_resource(GetDoctor, "/get_doctor/<int:doctor_id>")
+api.add_resource(DeleteDoctor, "/delete_doctor/<int:doctor_id>")
+api.add_resource(BlacklistDoctor, "/blacklist_doctor/<int:doctor_id>")
+api.add_resource(RemoveBlacklistDoctor, "/remove_blacklist_doctor/<int:doctor_id>")
+api.add_resource(UpdatePatient, "/update_patient/<int:patient_id>")
+api.add_resource(GetPatient, "/get_patient/<int:patient_id>")
+api.add_resource(RemoveBlacklistPatient, "/remove_blacklist_patient/<int:patient_id>")
+api.add_resource(BlacklistPatient, "/blacklist_patient/<int:patient_id>")
+api.add_resource(DeletePatient, "/delete_patient/<int:patient_id>")
+api.add_resource(PatientAvailableSlots, "/patient/available-slots")
+api.add_resource(PatientBookSlot, "/patient/book-slot/<int:slot_id>")
+api.add_resource(PatientCancelAppointment, "/patient/cancel-slot/<int:booking_id>")
+api.add_resource(PatientExportTreatmentHistory, "/patient/export-treatment-history")
+api.add_resource(PatientExportTreatmentHistoryStatus, "/patient/export-treatment-history/<int:job_id>")
+api.add_resource(PatientExportTreatmentHistoryDownload, "/patient/export-treatment-history/<int:job_id>/download")
+api.add_resource(UpdateAppointmentStatus, "/update_status/<int:app_id>")
+api.add_resource(DoctorAddTreatment, "/doctor/add-treatment/<int:booking_id>")
+api.add_resource(DoctorPatientHistory, "/doctor/patient-history/<int:pat_id>")
+api.add_resource(DoctorManageSlots, "/doctor/slots/<int:doc_id>")
+api.add_resource(DoctorCancelSlot, "/doctor/slots/cancel/<int:slot_id>")
+api.add_resource(DoctorMonthlyReports, "/doctor/monthly-reports")
+api.add_resource(DoctorMonthlyReportDownload, "/doctor/monthly-reports/<string:month_label>/download")
 api.add_resource(Search, "/search")

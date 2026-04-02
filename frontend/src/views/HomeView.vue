@@ -1,6 +1,6 @@
 <template>
   <div class="home-page">
-    <!-- Header -->
+    
     <header class="navbar bg-white d-flex justify-content-between align-items-center px-4">
       <div>
         <img src="@/assets/logo.png" height="80" width="80" alt="Logo" />
@@ -19,21 +19,21 @@
       </nav>
     </header>
 
-    <!-- Scrolling Banner (Modern Marquee Replacement) -->
+    
     <div class="scroll-container">
       <div class="scroll-text">
         Welcome to Vardha Hospitals. To proceed further, Login or Signup.
       </div>
     </div>
 
-    <!-- Welcome Title -->
+    
     <div class="text-center mt-4">
       <h2 class="title-heading">🏥 Welcome to the Hospital Dashboard</h2>
     </div>
 
     <br />
 
-    <!-- Main Section -->
+    
     <div class="container-fluid mt-4 px-5">
       <div class="row align-items-center">
         <div class="col-md-6">
@@ -65,7 +65,7 @@
 
     <hr />
 
-    <!-- Mission -->
+    
     <h3 class="text-center">🩺 Our Mission</h3>
     <p class="content-text text-center">
       <b>

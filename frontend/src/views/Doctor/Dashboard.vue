@@ -1,6 +1,6 @@
 <template>
   <div class="doctor-page">
-    <!-- Header (same style as admin for consistency) -->
+    
     <header
       style="background-color: white"
       class="navbar d-flex justify-content-between align-items-center px-4"
@@ -165,7 +165,7 @@
         </div>
       </div>
 
-      <!-- Slot Availability Reminder -->
+      
       <div class="card shadow mb-4">
         <div class="card-header bg-success text-white">
           <h4>Slot Availability Reminder</h4>
@@ -182,7 +182,7 @@
         </div>
       </div>
 
-      <!-- Monthly Reports -->
+      
       <div class="card shadow mb-4">
         <div class="card-header bg-info text-white d-flex justify-content-between align-items-center">
           <h4 class="mb-0">Monthly Reports</h4>

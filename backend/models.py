@@ -32,7 +32,7 @@ SLOT_LABELS = {
     "22:00": "10:00 PM",
 }
 
-# ---------------- MODELS ----------------
+# All the models required 
 
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)

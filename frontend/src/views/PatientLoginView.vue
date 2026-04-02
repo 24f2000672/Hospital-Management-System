@@ -1,6 +1,6 @@
 <template>
   <div class="login-page">
-    <!-- HEADER -->
+    
     <header class="navbar bg-white d-flex align-items-center justify-content-between px-4">
       <div>
         <img src="@/assets/logo.png" height="80" width="80" alt="Logo" />
@@ -17,12 +17,12 @@
       </nav>
     </header>
 
-    <!-- SCROLLING BANNER -->
+    
     <div class="scroll-container">
       <div class="scroll-text">Your health journey begins here — log in to care for yourself</div>
     </div>
 
-    <!-- LOGIN FORM -->
+    
     <div class="container mt-5">
       <div class="card shadow p-4 mx-auto login-card">
         <h2 class="text-center mb-4">Login Form</h2>
@@ -47,12 +47,12 @@
           <button type="submit" class="btn btn-primary w-100">Login</button>
         </form>
 
-        <!-- ERROR -->
+        
         <div v-if="errorMessage" class="alert alert-danger mt-3">
           {{ errorMessage }}
         </div>
 
-        <!-- SIGNUP -->
+        
         <div class="mt-3 text-center">
           <span>Don't have an account?</span>
           <router-link to="/register" class="ms-2">Sign Up</router-link>

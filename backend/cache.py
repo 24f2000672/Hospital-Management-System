@@ -19,6 +19,7 @@ redis_client = None
 def init_redis(app):
     """Initialize Redis client with Flask app config."""
     global redis_client
+
     try:
         # Get Redis config from environment or use defaults
         redis_host = os.getenv("REDIS_HOST", "localhost")
@@ -35,7 +36,7 @@ def init_redis(app):
             socket_connect_timeout=5
         )
         
-        # Test connection
+        
         redis_client.ping()
         print("✅ Redis Cache Connected Successfully")
         app.config['REDIS_ENABLED'] = True

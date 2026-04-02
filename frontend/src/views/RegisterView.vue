@@ -1,6 +1,6 @@
 <template>
   <div class="register-page">
-    <!-- Header -->
+    
     <header class="navbar bg-white d-flex align-items-center justify-content-between px-4">
       <div>
         <img src="@/assets/logo.png" height="80" width="80" alt="Logo" />
@@ -93,7 +93,7 @@
         <button type="submit" class="btn btn-primary w-100">Register</button>
       </form>
 
-      <!-- Error Message -->
+      
       <div v-if="errorMessage" class="alert alert-danger mt-3">
         {{ errorMessage }}
       </div>
