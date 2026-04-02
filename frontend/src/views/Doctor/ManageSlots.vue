@@ -38,7 +38,11 @@
         <div v-for="day in dates" :key="day" class="card mb-3 shadow-sm">
           <div class="card-header bg-primary text-white">{{ day }}</div>
           <div class="card-body">
-            <div v-for="timeKey in timeOptions" :key="`${day}-${timeKey}`" class="d-flex align-items-center mb-2">
+            <div
+              v-for="timeKey in visibleTimeOptions(day)"
+              :key="`${day}-${timeKey}`"
+              class="d-flex align-items-center mb-2"
+            >
               <template v-if="slotMap[slotKey(day, timeKey)]">
                 <span class="me-2">
                   {{ slotLabels[timeKey] || timeKey }} -
@@ -112,6 +116,23 @@ export default {
     },
     getToken() {
       return localStorage.getItem('access_token')
+    },
+    visibleTimeOptions(day) {
+      const today = new Date()
+      const selectedDay = new Date(`${day}T00:00:00`)
+
+      if (Number.isNaN(selectedDay.getTime())) {
+        return this.timeOptions
+      }
+
+      if (selectedDay.toDateString() !== today.toDateString()) {
+        return this.timeOptions
+      }
+
+      return this.timeOptions.filter((timeKey) => {
+        const slotDateTime = new Date(`${day}T${timeKey}:00`)
+        return slotDateTime > today
+      })
     },
     logout() {
       localStorage.removeItem('access_token')
