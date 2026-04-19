@@ -11,6 +11,8 @@ It supports role-based access for Admin, Doctor, and Patient.
 
 **Terminal 1 - Redis:**
 ```bash
+sudo apt update
+sudo apt install redis-server -y
 redis-server --daemonize yes && redis-cli ping
 ```
 

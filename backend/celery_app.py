@@ -16,7 +16,7 @@ JWTManager(flask_app)
 api.init_app(flask_app)
 
 daily_reminder_hour = int(os.getenv("DAILY_REMINDER_HOUR", "10"))
-daily_reminder_minute = int(os.getenv("DAILY_REMINDER_MINUTE", "28"))
+daily_reminder_minute = int(os.getenv("DAILY_REMINDER_MINUTE", "42"))
 
 celery_app = Celery(
     "tasks",
