@@ -207,6 +207,12 @@ export default {
     },
   },
   methods: {
+    normalizeAvailableSlotsResponse(payload) {
+      if (Array.isArray(payload) && payload.length) {
+        return payload[0]?.available_slots || []
+      }
+      return payload?.available_slots || []
+    },
     tokenHeaders() {
       const token = localStorage.getItem('access_token')
       return { Authorization: `Bearer ${token}` }
@@ -247,7 +253,7 @@ export default {
         this.treatmentHistory = dashboardResp.data.treatment_history || []
         this.doctors = dashboardResp.data.doctors || []
         this.departments = dashboardResp.data.departments || []
-        this.availableSlots = slotsResp.data.available_slots || []
+        this.availableSlots = this.normalizeAvailableSlotsResponse(slotsResp.data)
       } catch (err) {
         console.error(err)
         this.error = 'Unable to load patient dashboard data.'

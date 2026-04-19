@@ -993,6 +993,7 @@ class DoctorManageSlots(Resource):
             created += 1
 
         db.session.commit()
+        invalidate_cache("available_slots:*")
         return {"message": "Slots updated", "created": created}, 200
 
 
@@ -1018,6 +1019,7 @@ class DoctorCancelSlot(Resource):
 
         db.session.delete(slot)
         db.session.commit()
+        invalidate_cache("available_slots:*")
         return {"message": "Slot removed"}, 200
 
 

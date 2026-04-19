@@ -16,6 +16,50 @@ from flask_jwt_extended import get_jwt_identity
 # Redis client instance
 redis_client = None
 
+
+def _serialize_response(result):
+    """Normalize Flask-RESTful return values for safe JSON caching."""
+    if isinstance(result, tuple):
+        if len(result) == 3:
+            data, status, headers = result
+        elif len(result) == 2:
+            data, status = result
+            headers = None
+        else:
+            data = result[0]
+            status = 200
+            headers = None
+    else:
+        data = result
+        status = 200
+        headers = None
+
+    payload = {
+        "__cache_v": 2,
+        "data": data,
+        "status": status,
+    }
+    if headers is not None:
+        payload["headers"] = headers
+    return payload
+
+
+def _deserialize_cached_response(cached_payload):
+    """Convert cached JSON payload back to Flask-RESTful compatible response."""
+    # Backward compatibility: older cache entries are stored as [data, status].
+    if isinstance(cached_payload, list) and len(cached_payload) >= 2 and isinstance(cached_payload[1], int):
+        return cached_payload[0], cached_payload[1]
+
+    if isinstance(cached_payload, dict) and cached_payload.get("__cache_v") == 2:
+        data = cached_payload.get("data")
+        status = cached_payload.get("status", 200)
+        headers = cached_payload.get("headers")
+        if headers is not None:
+            return data, status, headers
+        return data, status
+
+    return cached_payload
+
 def init_redis(app):
     """Initialize Redis client with Flask app config."""
     global redis_client
@@ -119,7 +163,7 @@ def cache_response(ttl=300, prefix=None, user_specific=False):
                 cached = redis_client.get(cache_key)
                 if cached:
                     print(f"📦 Cache HIT: {cache_key}")
-                    return json.loads(cached)
+                    return _deserialize_cached_response(json.loads(cached))
             except Exception as e:
                 print(f"⚠️  Cache GET error: {e}")
             
@@ -128,10 +172,11 @@ def cache_response(ttl=300, prefix=None, user_specific=False):
             
             # Cache the response
             try:
+                cache_payload = _serialize_response(result)
                 redis_client.setex(
                     cache_key,
                     ttl,
-                    json.dumps(result)
+                    json.dumps(cache_payload)
                 )
                 print(f"💾 Cached: {cache_key} (TTL: {ttl}s)")
             except Exception as e:
