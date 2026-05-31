@@ -29,6 +29,20 @@
     <div class="container mt-5">
       <h2 class="mb-4">🏥 Vardha Hospital - Admin Dashboard</h2>
 
+      <div class="card shadow-sm mb-4">
+        <div class="card-body d-flex flex-wrap gap-2">
+          <router-link to="/admin/manage-doctors" class="btn btn-outline-secondary btn-sm">Manage Doctors</router-link>
+          <router-link to="/admin/manage-patients" class="btn btn-outline-secondary btn-sm">Manage Patients</router-link>
+          <router-link to="/admin/departments" class="btn btn-outline-secondary btn-sm">Departments</router-link>
+          <router-link to="/admin/analytics" class="btn btn-outline-secondary btn-sm">Analytics</router-link>
+          <router-link to="/admin/emergency-monitor" class="btn btn-outline-secondary btn-sm">Emergency Monitor</router-link>
+          <router-link to="/admin/rooms" class="btn btn-outline-secondary btn-sm">Rooms</router-link>
+          <router-link to="/admin/admissions" class="btn btn-outline-secondary btn-sm">Admissions</router-link>
+          <router-link to="/admin/billing" class="btn btn-outline-secondary btn-sm">Billing</router-link>
+          <router-link to="/admin/appointments" class="btn btn-outline-secondary btn-sm">Appointments</router-link>
+        </div>
+      </div>
+
       <!-- 🔎 Search -->
       <form @submit.prevent="searchUser" class="d-flex justify-content-center">
         <input

@@ -7,7 +7,32 @@ from flask import request, send_file
 from flask_restful import Api, Resource
 from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity
 from sqlalchemy import distinct, or_
-from models import User, db, Patient, Doctor, Department, Appointment, Treatment, ExportJob
+from models import (
+    User,
+    db,
+    Patient,
+    Doctor,
+    Department,
+    Appointment,
+    Treatment,
+    ExportJob,
+    MedicalRecord,
+    HealthReport,
+    VitalSigns,
+    EmergencyContact,
+    SOSLog,
+    EmergencyAlert,
+    MedicineReminder,
+    MedicationHistory,
+    SymptomCheck,
+    HealthRiskAssessment,
+    AccessibilitySettings,
+    VideoConsultation,
+    ChatMessage,
+    Room,
+    Admission,
+    Billing,
+)
 from cache import cache_response, invalidate_cache
 
 api = Api()
@@ -149,6 +174,929 @@ def _build_doctor_monthly_report(doctor_id, month_label):
         "appointments": len(appointments),
         "treatments": len(treatments),
     }
+
+
+def _current_user_or_403(role=None):
+    email = get_jwt_identity()
+    current_user = User.query.filter_by(email=email).first()
+
+    if not current_user:
+        return None, ({"message": "User not found"}, 404)
+
+    if role is not None and current_user.role != role:
+        return None, ({"message": "Access denied"}, 403)
+
+    return current_user, None
+
+
+def _patient_record_for_user(current_user):
+    return Patient.query.filter_by(email=current_user.email).first()
+
+
+def _doctor_record_for_user(current_user):
+    return Doctor.query.filter_by(email=current_user.email).first()
+
+
+def _parse_iso_datetime(value):
+    if isinstance(value, datetime):
+        return value
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(str(value))
+    except ValueError:
+        return None
+
+
+def _parse_iso_date(value):
+    if isinstance(value, date):
+        return value
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(str(value)).date()
+    except ValueError:
+        try:
+            return datetime.strptime(str(value), "%Y-%m-%d").date()
+        except ValueError:
+            return None
+
+
+def _room_has_active_admission(room_id, exclude_admission_id=None):
+    query = Admission.query.filter_by(room_id=room_id, status="ADMITTED")
+    if exclude_admission_id is not None:
+        query = query.filter(Admission.id != exclude_admission_id)
+    return query.first() is not None
+
+
+def _sync_room_status(room_id):
+    room = Room.query.get(room_id)
+    if not room:
+        return None
+
+    room.status = "OCCUPIED" if _room_has_active_admission(room_id) else "AVAILABLE"
+    return room
+
+
+def _serialize_room(room):
+    return {
+        "id": room.id,
+        "room_number": room.room_number,
+        "type": room.type,
+        "status": room.status,
+        "notes": room.notes,
+        "is_occupied": _room_has_active_admission(room.id),
+    }
+
+
+def _serialize_admission(admission):
+    patient = admission.patient or Patient.query.get(admission.patient_id)
+    room = admission.room or Room.query.get(admission.room_id)
+    return {
+        "id": admission.id,
+        "patient_id": admission.patient_id,
+        "patient_name": f"{patient.first_name} {patient.last_name}" if patient else None,
+        "room_id": admission.room_id,
+        "room_number": room.room_number if room else None,
+        "room_type": room.type if room else None,
+        "room_status": room.status if room else None,
+        "admission_date": admission.admission_date.isoformat() if admission.admission_date else None,
+        "discharge_date": admission.discharge_date.isoformat() if admission.discharge_date else None,
+        "status": admission.status,
+    }
+
+
+def _serialize_billing(bill):
+    patient = bill.patient or Patient.query.get(bill.patient_id)
+    admission = bill.admission or Admission.query.get(bill.admission_id) if bill.admission_id else None
+    room = admission.room if admission and admission.room else None
+    return {
+        "id": bill.id,
+        "patient_id": bill.patient_id,
+        "patient_name": f"{patient.first_name} {patient.last_name}" if patient else None,
+        "admission_id": bill.admission_id,
+        "admission_status": admission.status if admission else None,
+        "room_id": admission.room_id if admission else None,
+        "room_number": room.room_number if room else None,
+        "consultation_fees": bill.consultation_fees,
+        "medicine_fees": bill.medicine_fees,
+        "total_amount": bill.total_amount,
+        "status": bill.status,
+        "created_at": bill.created_at.isoformat() if bill.created_at else None,
+    }
+
+
+def _cleanup_room_after_admission(room_id):
+    room = Room.query.get(room_id)
+    if room and not _room_has_active_admission(room_id):
+        room.status = "AVAILABLE"
+    return room
+
+
+class PatientMedicalRecordResource(Resource):
+    @jwt_required()
+    def get(self):
+        current_user, error = _current_user_or_403(3)
+        if error:
+            return error
+
+        patient_record = _patient_record_for_user(current_user)
+        if not patient_record:
+            return {"message": "Patient record not found"}, 404
+
+        medical_record = MedicalRecord.query.filter_by(patient_id=patient_record.id).first()
+        if not medical_record:
+            return {"message": "No medical record found"}, 404
+
+        return {
+            "id": medical_record.id,
+            "patient_id": medical_record.patient_id,
+            "blood_group": medical_record.blood_group,
+            "allergies": medical_record.allergies,
+            "chronic_diseases": medical_record.chronic_diseases,
+            "height_cm": medical_record.height_cm,
+            "weight_kg": medical_record.weight_kg,
+            "bmi": medical_record.bmi,
+            "emergency_notes": medical_record.emergency_notes,
+        }, 200
+
+    @jwt_required()
+    def put(self):
+        current_user, error = _current_user_or_403(3)
+        if error:
+            return error
+
+        patient_record = _patient_record_for_user(current_user)
+        if not patient_record:
+            return {"message": "Patient record not found"}, 404
+
+        data = request.get_json() or {}
+        medical_record = MedicalRecord.query.filter_by(patient_id=patient_record.id).first()
+        if not medical_record:
+            medical_record = MedicalRecord(patient_id=patient_record.id)
+            db.session.add(medical_record)
+
+        medical_record.blood_group = data.get("blood_group", medical_record.blood_group)
+        medical_record.allergies = data.get("allergies", medical_record.allergies)
+        medical_record.chronic_diseases = data.get("chronic_diseases", medical_record.chronic_diseases)
+        medical_record.height_cm = data.get("height_cm", medical_record.height_cm)
+        medical_record.weight_kg = data.get("weight_kg", medical_record.weight_kg)
+        medical_record.bmi = data.get("bmi", medical_record.bmi)
+        medical_record.emergency_notes = data.get("emergency_notes", medical_record.emergency_notes)
+        db.session.commit()
+
+        return {"message": "Medical record saved successfully"}, 200
+
+
+class PatientHealthReportResource(Resource):
+    @jwt_required()
+    def get(self):
+        current_user, error = _current_user_or_403(3)
+        if error:
+            return error
+
+        patient_record = _patient_record_for_user(current_user)
+        if not patient_record:
+            return {"message": "Patient record not found"}, 404
+
+        reports = HealthReport.query.filter_by(patient_id=patient_record.id).order_by(HealthReport.uploaded_at.desc()).all()
+        return {
+            "reports": [
+                {
+                    "id": report.id,
+                    "report_type": report.report_type,
+                    "file_name": report.file_name,
+                    "file_path": report.file_path,
+                    "notes": report.notes,
+                    "uploaded_at": str(report.uploaded_at),
+                }
+                for report in reports
+            ]
+        }, 200
+
+    @jwt_required()
+    def post(self):
+        current_user, error = _current_user_or_403(3)
+        if error:
+            return error
+
+        patient_record = _patient_record_for_user(current_user)
+        if not patient_record:
+            return {"message": "Patient record not found"}, 404
+
+        data = request.get_json() or {}
+        report_type = str(data.get("report_type", "")).strip()
+        file_name = str(data.get("file_name", "")).strip()
+        file_path = str(data.get("file_path", "")).strip()
+        if not report_type or not file_name or not file_path:
+            return {"message": "Report type, file name, and file path are required"}, 400
+
+        report = HealthReport(
+            patient_id=patient_record.id,
+            report_type=report_type,
+            file_name=file_name,
+            file_path=file_path,
+            notes=data.get("notes"),
+        )
+        db.session.add(report)
+        db.session.commit()
+
+        return {"message": "Health report saved", "id": report.id}, 201
+
+
+class PatientVitalSignsResource(Resource):
+    @jwt_required()
+    def get(self):
+        current_user, error = _current_user_or_403(3)
+        if error:
+            return error
+
+        patient_record = _patient_record_for_user(current_user)
+        if not patient_record:
+            return {"message": "Patient record not found"}, 404
+
+        vitals = VitalSigns.query.filter_by(patient_id=patient_record.id).order_by(VitalSigns.recorded_at.desc()).all()
+        return {
+            "vitals": [
+                {
+                    "id": vital.id,
+                    "heart_rate": vital.heart_rate,
+                    "blood_pressure": vital.blood_pressure,
+                    "oxygen_level": vital.oxygen_level,
+                    "temperature": vital.temperature,
+                    "sugar_level": vital.sugar_level,
+                    "recorded_at": str(vital.recorded_at),
+                }
+                for vital in vitals
+            ]
+        }, 200
+
+    @jwt_required()
+    def post(self):
+        current_user, error = _current_user_or_403(3)
+        if error:
+            return error
+
+        patient_record = _patient_record_for_user(current_user)
+        if not patient_record:
+            return {"message": "Patient record not found"}, 404
+
+        data = request.get_json() or {}
+        vital = VitalSigns(
+            patient_id=patient_record.id,
+            heart_rate=data.get("heart_rate"),
+            blood_pressure=data.get("blood_pressure"),
+            oxygen_level=data.get("oxygen_level"),
+            temperature=data.get("temperature"),
+            sugar_level=data.get("sugar_level"),
+        )
+        db.session.add(vital)
+        db.session.commit()
+
+        return {"message": "Vital signs saved", "id": vital.id}, 201
+
+
+class PatientEmergencyContactsResource(Resource):
+    @jwt_required()
+    def get(self):
+        current_user, error = _current_user_or_403(3)
+        if error:
+            return error
+
+        patient_record = _patient_record_for_user(current_user)
+        if not patient_record:
+            return {"message": "Patient record not found"}, 404
+
+        contacts = EmergencyContact.query.filter_by(patient_id=patient_record.id).all()
+        return {
+            "contacts": [
+                {
+                    "id": contact.id,
+                    "contact_name": contact.contact_name,
+                    "relationship": contact.relationship,
+                    "phone_number": contact.phone_number,
+                    "is_primary": contact.is_primary == "Y",
+                }
+                for contact in contacts
+            ]
+        }, 200
+
+    @jwt_required()
+    def post(self):
+        current_user, error = _current_user_or_403(3)
+        if error:
+            return error
+
+        patient_record = _patient_record_for_user(current_user)
+        if not patient_record:
+            return {"message": "Patient record not found"}, 404
+
+        data = request.get_json() or {}
+        if not data.get("contact_name") or not data.get("phone_number"):
+            return {"message": "Contact name and phone number are required"}, 400
+
+        if str(data.get("is_primary", "N")).upper() == "Y":
+            EmergencyContact.query.filter_by(patient_id=patient_record.id, is_primary="Y").update({"is_primary": "N"})
+
+        contact = EmergencyContact(
+            patient_id=patient_record.id,
+            contact_name=data.get("contact_name"),
+            relationship=data.get("relationship"),
+            phone_number=data.get("phone_number"),
+            is_primary="Y" if str(data.get("is_primary", "N")).upper() == "Y" else "N",
+        )
+        db.session.add(contact)
+        db.session.commit()
+
+        return {"message": "Emergency contact saved", "id": contact.id}, 201
+
+
+class PatientMedicineReminderResource(Resource):
+    @jwt_required()
+    def get(self):
+        current_user, error = _current_user_or_403(3)
+        if error:
+            return error
+
+        patient_record = _patient_record_for_user(current_user)
+        if not patient_record:
+            return {"message": "Patient record not found"}, 404
+
+        reminders = MedicineReminder.query.filter_by(patient_id=patient_record.id).order_by(MedicineReminder.created_at.desc()).all()
+        return {
+            "reminders": [
+                {
+                    "id": reminder.id,
+                    "medicine_name": reminder.medicine_name,
+                    "dosage": reminder.dosage,
+                    "reminder_time": reminder.reminder_time,
+                    "frequency": reminder.frequency,
+                    "start_date": str(reminder.start_date) if reminder.start_date else None,
+                    "end_date": str(reminder.end_date) if reminder.end_date else None,
+                    "active": reminder.active == "Y",
+                }
+                for reminder in reminders
+            ]
+        }, 200
+
+    @jwt_required()
+    def post(self):
+        current_user, error = _current_user_or_403(3)
+        if error:
+            return error
+
+        patient_record = _patient_record_for_user(current_user)
+        if not patient_record:
+            return {"message": "Patient record not found"}, 404
+
+        data = request.get_json() or {}
+        if not data.get("medicine_name") or not data.get("dosage"):
+            return {"message": "Medicine name and dosage are required"}, 400
+
+        reminder = MedicineReminder(
+            patient_id=patient_record.id,
+            medicine_name=data.get("medicine_name"),
+            dosage=data.get("dosage"),
+            reminder_time=data.get("reminder_time", "08:00"),
+            frequency=data.get("frequency", "Daily"),
+            start_date=_parse_iso_date(data.get("start_date")),
+            end_date=_parse_iso_date(data.get("end_date")),
+            active="Y",
+        )
+        db.session.add(reminder)
+        db.session.commit()
+
+        return {"message": "Medicine reminder saved", "id": reminder.id}, 201
+
+
+class PatientAccessibilitySettingsResource(Resource):
+    @jwt_required()
+    def get(self):
+        current_user, error = _current_user_or_403(3)
+        if error:
+            return error
+
+        patient_record = _patient_record_for_user(current_user)
+        if not patient_record:
+            return {"message": "Patient record not found"}, 404
+
+        settings = AccessibilitySettings.query.filter_by(patient_id=patient_record.id).first()
+        if not settings:
+            return {"message": "No accessibility settings found"}, 404
+
+        return {
+            "voice_mode": settings.voice_mode == "Y",
+            "high_contrast": settings.high_contrast == "Y",
+            "large_text": settings.large_text == "Y",
+            "sign_language_mode": settings.sign_language_mode == "Y",
+            "vibration_alerts": settings.vibration_alerts == "Y",
+        }, 200
+
+    @jwt_required()
+    def put(self):
+        current_user, error = _current_user_or_403(3)
+        if error:
+            return error
+
+        patient_record = _patient_record_for_user(current_user)
+        if not patient_record:
+            return {"message": "Patient record not found"}, 404
+
+        data = request.get_json() or {}
+        settings = AccessibilitySettings.query.filter_by(patient_id=patient_record.id).first()
+        if not settings:
+            settings = AccessibilitySettings(patient_id=patient_record.id)
+            db.session.add(settings)
+
+        for field in ["voice_mode", "high_contrast", "large_text", "sign_language_mode", "vibration_alerts"]:
+            if field in data:
+                setattr(settings, field, "Y" if bool(data.get(field)) else "N")
+
+        db.session.commit()
+        return {"message": "Accessibility settings saved"}, 200
+
+
+class PatientSOSLogResource(Resource):
+    @jwt_required()
+    def get(self):
+        current_user, error = _current_user_or_403(3)
+        if error:
+            return error
+
+        patient_record = _patient_record_for_user(current_user)
+        if not patient_record:
+            return {"message": "Patient record not found"}, 404
+
+        sos_logs = SOSLog.query.filter_by(patient_id=patient_record.id).order_by(SOSLog.created_at.desc()).all()
+        return {
+            "sos_logs": [
+                {
+                    "id": log.id,
+                    "latitude": log.latitude,
+                    "longitude": log.longitude,
+                    "status": log.status,
+                    "created_at": str(log.created_at),
+                }
+                for log in sos_logs
+            ]
+        }, 200
+
+    @jwt_required()
+    def post(self):
+        current_user, error = _current_user_or_403(3)
+        if error:
+            return error
+
+        patient_record = _patient_record_for_user(current_user)
+        if not patient_record:
+            return {"message": "Patient record not found"}, 404
+
+        data = request.get_json() or {}
+        latitude = data.get("latitude")
+        longitude = data.get("longitude")
+        if latitude is None or longitude is None:
+            return {"message": "Latitude and longitude are required"}, 400
+
+        sos_log = SOSLog(patient_id=patient_record.id, latitude=latitude, longitude=longitude, status="ACTIVE")
+        db.session.add(sos_log)
+        db.session.flush()
+
+        alert = EmergencyAlert(
+            sos_log_id=sos_log.id,
+            alert_type=data.get("alert_type", "SOS"),
+            response_status="PENDING",
+            contact_notified=data.get("contact_notified"),
+        )
+        db.session.add(alert)
+        db.session.commit()
+
+        return {"message": "SOS logged", "id": sos_log.id}, 201
+
+
+class PatientSymptomCheckResource(Resource):
+    @jwt_required()
+    def post(self):
+        current_user, error = _current_user_or_403(3)
+        if error:
+            return error
+
+        patient_record = _patient_record_for_user(current_user)
+        if not patient_record:
+            return {"message": "Patient record not found"}, 404
+
+        data = request.get_json() or {}
+        symptoms = str(data.get("symptoms", "")).strip()
+        if not symptoms:
+            return {"message": "Symptoms are required"}, 400
+
+        prediction = data.get("ai_prediction") or "Basic triage suggested: consult a doctor if symptoms persist."
+        symptom_check = SymptomCheck(patient_id=patient_record.id, symptoms=symptoms, ai_prediction=prediction)
+        risk_assessment = HealthRiskAssessment(
+            patient_id=patient_record.id,
+            risk_score=float(data.get("risk_score", 50.0)),
+            disease_category=data.get("disease_category", "General"),
+            recommendations=data.get("recommendations", prediction),
+        )
+        db.session.add(symptom_check)
+        db.session.add(risk_assessment)
+        db.session.commit()
+
+        return {"message": "Symptom analysis saved", "prediction": prediction}, 201
+
+
+class DoctorTelemedicineResource(Resource):
+    @jwt_required()
+    def get(self):
+        current_user, error = _current_user_or_403(2)
+        if error:
+            return error
+
+        doctor_record = _doctor_record_for_user(current_user)
+        if not doctor_record:
+            return {"message": "Doctor record not found"}, 404
+
+        consultations = VideoConsultation.query.filter_by(doctor_id=doctor_record.id).order_by(VideoConsultation.scheduled_for.desc()).all()
+        return {
+            "consultations": [
+                {
+                    "id": consultation.id,
+                    "patient_id": consultation.patient_id,
+                    "meeting_link": consultation.meeting_link,
+                    "scheduled_for": str(consultation.scheduled_for),
+                    "status": consultation.status,
+                }
+                for consultation in consultations
+            ]
+        }, 200
+
+    @jwt_required()
+    def post(self):
+        current_user, error = _current_user_or_403(2)
+        if error:
+            return error
+
+        doctor_record = _doctor_record_for_user(current_user)
+        if not doctor_record:
+            return {"message": "Doctor record not found"}, 404
+
+        data = request.get_json() or {}
+        patient_id = data.get("patient_id")
+        meeting_link = str(data.get("meeting_link", "")).strip()
+        scheduled_for = _parse_iso_datetime(data.get("scheduled_for"))
+
+        if not patient_id or not meeting_link or not scheduled_for:
+            return {"message": "Patient, meeting link, and scheduled time are required"}, 400
+
+        consultation = VideoConsultation(
+            doctor_id=doctor_record.id,
+            patient_id=patient_id,
+            meeting_link=meeting_link,
+            scheduled_for=scheduled_for,
+            status="SCHEDULED",
+        )
+        db.session.add(consultation)
+        db.session.commit()
+
+        return {"message": "Telemedicine consultation scheduled", "id": consultation.id}, 201
+
+
+class AdminRoomResource(Resource):
+    @jwt_required()
+    def get(self):
+        current_user, error = _current_user_or_403(1)
+        if error:
+            return error
+
+        rooms = Room.query.order_by(Room.room_number.asc()).all()
+        return {
+            "rooms": [_serialize_room(room) for room in rooms]
+        }, 200
+
+    @jwt_required()
+    def post(self):
+        current_user, error = _current_user_or_403(1)
+        if error:
+            return error
+
+        data = request.get_json() or {}
+        room_number = str(data.get("room_number", "")).strip()
+        room_type = str(data.get("type", "")).strip()
+        if not room_number or not room_type:
+            return {"message": "Room number and type are required"}, 400
+
+        if Room.query.filter_by(room_number=room_number).first():
+            return {"message": "Room number already exists"}, 400
+
+        room = Room(
+            room_number=room_number,
+            type=room_type,
+            status=str(data.get("status", "AVAILABLE")).strip().upper() or "AVAILABLE",
+            notes=data.get("notes"),
+        )
+        db.session.add(room)
+        db.session.commit()
+
+        return {"message": "Room saved", "id": room.id}, 201
+
+
+class AdminRoomItemResource(Resource):
+    @jwt_required()
+    def put(self, room_id):
+        current_user, error = _current_user_or_403(1)
+        if error:
+            return error
+
+        room = Room.query.get(room_id)
+        if not room:
+            return {"message": "Room not found"}, 404
+
+        data = request.get_json() or {}
+        room_number = str(data.get("room_number", room.room_number)).strip()
+        room_type = str(data.get("type", room.type)).strip()
+        status = str(data.get("status", room.status or "AVAILABLE")).strip().upper()
+
+        if not room_number or not room_type:
+            return {"message": "Room number and type are required"}, 400
+
+        duplicate = Room.query.filter(Room.room_number == room_number, Room.id != room.id).first()
+        if duplicate:
+            return {"message": "Room number already exists"}, 400
+
+        room.room_number = room_number
+        room.type = room_type
+        room.status = status
+        room.notes = data.get("notes")
+        db.session.commit()
+
+        return {"message": "Room updated", "room": _serialize_room(room)}, 200
+
+    @jwt_required()
+    def delete(self, room_id):
+        current_user, error = _current_user_or_403(1)
+        if error:
+            return error
+
+        room = Room.query.get(room_id)
+        if not room:
+            return {"message": "Room not found"}, 404
+
+        if Admission.query.filter_by(room_id=room.id).first():
+            return {"message": "Room has admissions and cannot be deleted"}, 400
+
+        db.session.delete(room)
+        db.session.commit()
+        return {"message": "Room deleted"}, 200
+
+
+class AdminAdmissionResource(Resource):
+    @jwt_required()
+    def get(self):
+        current_user, error = _current_user_or_403(1)
+        if error:
+            return error
+
+        admissions = Admission.query.order_by(Admission.admission_date.desc()).all()
+        patients = Patient.query.order_by(Patient.first_name.asc(), Patient.last_name.asc()).all()
+        rooms = Room.query.order_by(Room.room_number.asc()).all()
+        return {
+            "admissions": [_serialize_admission(admission) for admission in admissions],
+            "patients": [
+                {
+                    "id": patient.id,
+                    "first_name": patient.first_name,
+                    "last_name": patient.last_name,
+                    "email": patient.email,
+                }
+                for patient in patients
+            ],
+            "rooms": [_serialize_room(room) for room in rooms],
+        }, 200
+
+    @jwt_required()
+    def post(self):
+        current_user, error = _current_user_or_403(1)
+        if error:
+            return error
+
+        data = request.get_json() or {}
+        patient_id = data.get("patient_id")
+        room_id = data.get("room_id")
+        status = str(data.get("status", "ADMITTED")).strip().upper() or "ADMITTED"
+        admission_date = _parse_iso_datetime(data.get("admission_date")) or datetime.utcnow()
+        discharge_date = _parse_iso_datetime(data.get("discharge_date"))
+
+        if not patient_id or not room_id:
+            return {"message": "Patient and room are required"}, 400
+
+        patient = Patient.query.get(patient_id)
+        room = Room.query.get(room_id)
+        if not patient:
+            return {"message": "Patient not found"}, 404
+        if not room:
+            return {"message": "Room not found"}, 404
+        if room.status == "OCCUPIED" and status == "ADMITTED":
+            return {"message": "Room is already occupied"}, 400
+
+        admission = Admission(
+            patient_id=patient_id,
+            room_id=room_id,
+            admission_date=admission_date,
+            discharge_date=discharge_date,
+            status=status,
+        )
+        db.session.add(admission)
+        if admission.status == "ADMITTED":
+            room.status = "OCCUPIED"
+        db.session.commit()
+
+        return {"message": "Admission saved", "id": admission.id}, 201
+
+
+class AdminAdmissionItemResource(Resource):
+    @jwt_required()
+    def put(self, admission_id):
+        current_user, error = _current_user_or_403(1)
+        if error:
+            return error
+
+        admission = Admission.query.get(admission_id)
+        if not admission:
+            return {"message": "Admission not found"}, 404
+
+        previous_room_id = admission.room_id
+        data = request.get_json() or {}
+
+        patient_id = data.get("patient_id", admission.patient_id)
+        room_id = data.get("room_id", admission.room_id)
+        status = str(data.get("status", admission.status)).strip().upper() or admission.status
+        admission_date = _parse_iso_datetime(data.get("admission_date")) or admission.admission_date
+        discharge_date = _parse_iso_datetime(data.get("discharge_date"))
+        if data.get("discharge_date") is None and status == "DISCHARGED":
+            discharge_date = admission.discharge_date or datetime.utcnow()
+
+        patient = Patient.query.get(patient_id)
+        room = Room.query.get(room_id)
+        if not patient:
+            return {"message": "Patient not found"}, 404
+        if not room:
+            return {"message": "Room not found"}, 404
+        if room.id != previous_room_id and room.status == "OCCUPIED" and status == "ADMITTED":
+            return {"message": "Selected room is already occupied"}, 400
+
+        admission.patient_id = patient_id
+        admission.room_id = room_id
+        admission.status = status
+        admission.admission_date = admission_date
+        admission.discharge_date = discharge_date
+
+        if admission.status == "ADMITTED":
+            room.status = "OCCUPIED"
+        else:
+            _cleanup_room_after_admission(previous_room_id)
+            if room.id != previous_room_id:
+                _cleanup_room_after_admission(room.id)
+
+        db.session.commit()
+
+        return {"message": "Admission updated", "admission": _serialize_admission(admission)}, 200
+
+    @jwt_required()
+    def delete(self, admission_id):
+        current_user, error = _current_user_or_403(1)
+        if error:
+            return error
+
+        admission = Admission.query.get(admission_id)
+        if not admission:
+            return {"message": "Admission not found"}, 404
+
+        room_id = admission.room_id
+        db.session.delete(admission)
+        db.session.commit()
+        _cleanup_room_after_admission(room_id)
+        db.session.commit()
+
+        return {"message": "Admission deleted"}, 200
+
+
+class AdminBillingResource(Resource):
+    @jwt_required()
+    def get(self):
+        current_user, error = _current_user_or_403(1)
+        if error:
+            return error
+
+        bills = Billing.query.order_by(Billing.created_at.desc()).all()
+        patients = Patient.query.order_by(Patient.first_name.asc(), Patient.last_name.asc()).all()
+        admissions = Admission.query.order_by(Admission.admission_date.desc()).all()
+        return {
+            "billing": [_serialize_billing(bill) for bill in bills],
+            "patients": [
+                {
+                    "id": patient.id,
+                    "first_name": patient.first_name,
+                    "last_name": patient.last_name,
+                    "email": patient.email,
+                }
+                for patient in patients
+            ],
+            "admissions": [_serialize_admission(admission) for admission in admissions],
+        }, 200
+
+    @jwt_required()
+    def post(self):
+        current_user, error = _current_user_or_403(1)
+        if error:
+            return error
+
+        data = request.get_json() or {}
+        consultation_fees = float(data.get("consultation_fees", 0) or 0)
+        medicine_fees = float(data.get("medicine_fees", 0) or 0)
+        total_amount = float(data.get("total_amount", consultation_fees + medicine_fees) or (consultation_fees + medicine_fees))
+        patient_id = data.get("patient_id")
+        admission_id = data.get("admission_id")
+
+        if not patient_id:
+            return {"message": "Patient is required"}, 400
+
+        patient = Patient.query.get(patient_id)
+        if not patient:
+            return {"message": "Patient not found"}, 404
+
+        if admission_id:
+            admission = Admission.query.get(admission_id)
+            if not admission:
+                return {"message": "Admission not found"}, 404
+            if admission.patient_id != patient.id:
+                return {"message": "Admission does not belong to the selected patient"}, 400
+
+        bill = Billing(
+            patient_id=patient_id,
+            admission_id=admission_id,
+            consultation_fees=consultation_fees,
+            medicine_fees=medicine_fees,
+            total_amount=total_amount,
+            status=str(data.get("status", "PENDING")).strip().upper() or "PENDING",
+        )
+        db.session.add(bill)
+        db.session.commit()
+
+        return {"message": "Billing record saved", "id": bill.id}, 201
+
+
+class AdminBillingItemResource(Resource):
+    @jwt_required()
+    def put(self, bill_id):
+        current_user, error = _current_user_or_403(1)
+        if error:
+            return error
+
+        bill = Billing.query.get(bill_id)
+        if not bill:
+            return {"message": "Billing record not found"}, 404
+
+        data = request.get_json() or {}
+        patient_id = data.get("patient_id", bill.patient_id)
+        admission_id = data.get("admission_id", bill.admission_id)
+        consultation_fees = float(data.get("consultation_fees", bill.consultation_fees) or 0)
+        medicine_fees = float(data.get("medicine_fees", bill.medicine_fees) or 0)
+        total_amount = float(data.get("total_amount", consultation_fees + medicine_fees) or (consultation_fees + medicine_fees))
+        status = str(data.get("status", bill.status)).strip().upper() or bill.status
+
+        patient = Patient.query.get(patient_id)
+        if not patient:
+            return {"message": "Patient not found"}, 404
+
+        if admission_id:
+            admission = Admission.query.get(admission_id)
+            if not admission:
+                return {"message": "Admission not found"}, 404
+            if admission.patient_id != patient.id:
+                return {"message": "Admission does not belong to the selected patient"}, 400
+
+        bill.patient_id = patient_id
+        bill.admission_id = admission_id
+        bill.consultation_fees = consultation_fees
+        bill.medicine_fees = medicine_fees
+        bill.total_amount = total_amount
+        bill.status = status
+        db.session.commit()
+
+        return {"message": "Billing record updated", "billing": _serialize_billing(bill)}, 200
+
+    @jwt_required()
+    def delete(self, bill_id):
+        current_user, error = _current_user_or_403(1)
+        if error:
+            return error
+
+        bill = Billing.query.get(bill_id)
+        if not bill:
+            return {"message": "Billing record not found"}, 404
+
+        db.session.delete(bill)
+        db.session.commit()
+        return {"message": "Billing record deleted"}, 200
 
 #login and signup routes
 class Login(Resource):
@@ -1372,3 +2320,18 @@ api.add_resource(DoctorCancelSlot, "/doctor/slots/cancel/<int:slot_id>")
 api.add_resource(DoctorMonthlyReports, "/doctor/monthly-reports")
 api.add_resource(DoctorMonthlyReportDownload, "/doctor/monthly-reports/<string:month_label>/download")
 api.add_resource(Search, "/search")
+api.add_resource(PatientMedicalRecordResource, "/patient/medical-record")
+api.add_resource(PatientHealthReportResource, "/patient/health-reports")
+api.add_resource(PatientVitalSignsResource, "/patient/vital-signs")
+api.add_resource(PatientEmergencyContactsResource, "/patient/emergency-contacts")
+api.add_resource(PatientMedicineReminderResource, "/patient/medicine-reminders")
+api.add_resource(PatientAccessibilitySettingsResource, "/patient/accessibility-settings")
+api.add_resource(PatientSOSLogResource, "/patient/sos-logs")
+api.add_resource(PatientSymptomCheckResource, "/patient/symptom-checks")
+api.add_resource(DoctorTelemedicineResource, "/doctor/telemedicine")
+api.add_resource(AdminRoomResource, "/admin/rooms")
+api.add_resource(AdminRoomItemResource, "/admin/rooms/<int:room_id>")
+api.add_resource(AdminAdmissionResource, "/admin/admissions")
+api.add_resource(AdminAdmissionItemResource, "/admin/admissions/<int:admission_id>")
+api.add_resource(AdminBillingResource, "/admin/billing")
+api.add_resource(AdminBillingItemResource, "/admin/billing/<int:bill_id>")

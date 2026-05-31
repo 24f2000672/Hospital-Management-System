@@ -118,3 +118,198 @@ class NotificationLog(db.Model):
     subject = db.Column(db.String(120), nullable=True)
     message = db.Column(db.String(500), nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+# Health Guardian+ extensions
+
+class MedicalRecord(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    patient_id = db.Column(db.Integer, db.ForeignKey('patient.id'), unique=True, nullable=False)
+    blood_group = db.Column(db.String(10))
+    allergies = db.Column(db.String(255))
+    chronic_diseases = db.Column(db.String(255))
+    height_cm = db.Column(db.Float)
+    weight_kg = db.Column(db.Float)
+    bmi = db.Column(db.Float)
+    emergency_notes = db.Column(db.Text)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    patient = db.relationship('Patient', backref=db.backref('medical_record', uselist=False))
+
+
+class HealthReport(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    patient_id = db.Column(db.Integer, db.ForeignKey('patient.id'), nullable=False)
+    report_type = db.Column(db.String(50), nullable=False)
+    file_name = db.Column(db.String(255), nullable=False)
+    file_path = db.Column(db.String(255), nullable=False)
+    notes = db.Column(db.Text)
+    uploaded_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    patient = db.relationship('Patient', backref='health_reports')
+
+
+class VitalSigns(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    patient_id = db.Column(db.Integer, db.ForeignKey('patient.id'), nullable=False)
+    heart_rate = db.Column(db.Integer)
+    blood_pressure = db.Column(db.String(20))
+    oxygen_level = db.Column(db.Integer)
+    temperature = db.Column(db.Float)
+    sugar_level = db.Column(db.Float)
+    recorded_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    patient = db.relationship('Patient', backref='vital_signs')
+
+
+class EmergencyContact(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    patient_id = db.Column(db.Integer, db.ForeignKey('patient.id'), nullable=False)
+    contact_name = db.Column(db.String(100), nullable=False)
+    relationship = db.Column(db.String(50))
+    phone_number = db.Column(db.String(20), nullable=False)
+    is_primary = db.Column(db.String(1), default='N')
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    patient = db.relationship('Patient', backref='emergency_contacts')
+
+
+class SOSLog(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    patient_id = db.Column(db.Integer, db.ForeignKey('patient.id'), nullable=False)
+    latitude = db.Column(db.Float, nullable=False)
+    longitude = db.Column(db.Float, nullable=False)
+    status = db.Column(db.String(30), default='ACTIVE')
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    patient = db.relationship('Patient', backref='sos_logs')
+
+
+class EmergencyAlert(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    sos_log_id = db.Column(db.Integer, db.ForeignKey('s_o_s_log.id'), nullable=False)
+    alert_type = db.Column(db.String(50), nullable=False)
+    response_status = db.Column(db.String(30), default='PENDING')
+    contact_notified = db.Column(db.String(100))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    sos_log = db.relationship('SOSLog', backref=db.backref('alerts', lazy=True))
+
+
+class MedicineReminder(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    patient_id = db.Column(db.Integer, db.ForeignKey('patient.id'), nullable=False)
+    medicine_name = db.Column(db.String(120), nullable=False)
+    dosage = db.Column(db.String(80), nullable=False)
+    reminder_time = db.Column(db.String(20), nullable=False)
+    frequency = db.Column(db.String(40), nullable=False)
+    start_date = db.Column(db.Date)
+    end_date = db.Column(db.Date)
+    active = db.Column(db.String(1), default='Y')
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    patient = db.relationship('Patient', backref='medicine_reminders')
+
+
+class MedicationHistory(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    reminder_id = db.Column(db.Integer, db.ForeignKey('medicine_reminder.id'), nullable=False)
+    taken_dose = db.Column(db.Integer, default=0)
+    missed_dose = db.Column(db.Integer, default=0)
+    compliance_percent = db.Column(db.Float, default=0.0)
+    log_date = db.Column(db.Date, default=datetime.utcnow)
+
+    reminder = db.relationship('MedicineReminder', backref='medication_history')
+
+
+class SymptomCheck(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    patient_id = db.Column(db.Integer, db.ForeignKey('patient.id'), nullable=False)
+    symptoms = db.Column(db.Text, nullable=False)
+    ai_prediction = db.Column(db.String(255))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    patient = db.relationship('Patient', backref='symptom_checks')
+
+
+class HealthRiskAssessment(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    patient_id = db.Column(db.Integer, db.ForeignKey('patient.id'), nullable=False)
+    risk_score = db.Column(db.Float, nullable=False)
+    disease_category = db.Column(db.String(100))
+    recommendations = db.Column(db.Text)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    patient = db.relationship('Patient', backref='risk_assessments')
+
+
+class AccessibilitySettings(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    patient_id = db.Column(db.Integer, db.ForeignKey('patient.id'), unique=True, nullable=False)
+    voice_mode = db.Column(db.String(1), default='N')
+    high_contrast = db.Column(db.String(1), default='N')
+    large_text = db.Column(db.String(1), default='N')
+    sign_language_mode = db.Column(db.String(1), default='N')
+    vibration_alerts = db.Column(db.String(1), default='N')
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    patient = db.relationship('Patient', backref=db.backref('accessibility_settings', uselist=False))
+
+
+class VideoConsultation(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    doctor_id = db.Column(db.Integer, db.ForeignKey('doctor.id'), nullable=False)
+    patient_id = db.Column(db.Integer, db.ForeignKey('patient.id'), nullable=False)
+    meeting_link = db.Column(db.String(255), nullable=False)
+    scheduled_for = db.Column(db.DateTime, nullable=False)
+    status = db.Column(db.String(30), default='SCHEDULED')
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    doctor = db.relationship('Doctor', backref='video_consultations')
+    patient = db.relationship('Patient', backref='video_consultations')
+
+
+class ChatMessage(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    consultation_id = db.Column(db.Integer, db.ForeignKey('video_consultation.id'), nullable=False)
+    sender_role = db.Column(db.String(20), nullable=False)
+    message = db.Column(db.Text, nullable=False)
+    sent_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    consultation = db.relationship('VideoConsultation', backref='messages')
+
+
+class Room(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    room_number = db.Column(db.String(20), unique=True, nullable=False)
+    type = db.Column(db.String(50), nullable=False)
+    status = db.Column(db.String(20), default='AVAILABLE')
+    notes = db.Column(db.String(255))
+
+
+class Admission(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    patient_id = db.Column(db.Integer, db.ForeignKey('patient.id'), nullable=False)
+    room_id = db.Column(db.Integer, db.ForeignKey('room.id'), nullable=False)
+    admission_date = db.Column(db.DateTime, default=datetime.utcnow)
+    discharge_date = db.Column(db.DateTime, nullable=True)
+    status = db.Column(db.String(20), default='ADMITTED')
+
+    patient = db.relationship('Patient', backref='admissions')
+    room = db.relationship('Room', backref='admissions')
+
+
+class Billing(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    patient_id = db.Column(db.Integer, db.ForeignKey('patient.id'), nullable=False)
+    admission_id = db.Column(db.Integer, db.ForeignKey('admission.id'), nullable=True)
+    consultation_fees = db.Column(db.Float, default=0.0)
+    medicine_fees = db.Column(db.Float, default=0.0)
+    total_amount = db.Column(db.Float, default=0.0)
+    status = db.Column(db.String(20), default='PENDING')
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    patient = db.relationship('Patient', backref='billings')
+    admission = db.relationship('Admission', backref='billings')

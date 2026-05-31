@@ -18,6 +18,9 @@
     <!-- Signup Form -->
     <div class="container mt-4">
       <h2 class="mb-4">Patient Signup Form</h2>
+      <p class="text-muted mb-4">
+        Register once to manage appointments, records, reminders, SOS alerts, and accessibility tools.
+      </p>
 
       <form @submit.prevent="registerPatient">
         <input

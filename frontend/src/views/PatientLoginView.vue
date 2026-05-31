@@ -10,10 +10,16 @@
         <h1>Vardha Hospital</h1>
       </div>
 
-      <nav class="d-flex gap-3">
-        <router-link to="/login" class="btn btn-outline-success">Patient Login</router-link>
-        <router-link to="/login" class="btn btn-outline-secondary">Doctor Login</router-link>
-        <router-link to="/login" class="btn btn-outline-primary">Admin Login</router-link>
+      <nav class="d-flex gap-3 flex-wrap">
+        <button class="btn" :class="selectedRole === 'patient' ? 'btn-success' : 'btn-outline-success'" @click="selectedRole = 'patient'">
+          Patient Login
+        </button>
+        <button class="btn" :class="selectedRole === 'doctor' ? 'btn-secondary' : 'btn-outline-secondary'" @click="selectedRole = 'doctor'">
+          Doctor Login
+        </button>
+        <button class="btn" :class="selectedRole === 'admin' ? 'btn-primary' : 'btn-outline-primary'" @click="selectedRole = 'admin'">
+          Admin Login
+        </button>
       </nav>
     </header>
 
@@ -25,7 +31,8 @@
     
     <div class="container mt-5">
       <div class="card shadow p-4 mx-auto login-card">
-        <h2 class="text-center mb-4">Login Form</h2>
+        <h2 class="text-center mb-2">{{ roleTitle }} Login</h2>
+        <p class="text-center text-muted mb-4">Choose a role, then sign in to the correct dashboard.</p>
 
         <form @submit.prevent="loginUser">
           <input
@@ -75,7 +82,14 @@ export default {
         password: '',
       },
       errorMessage: '',
+      selectedRole: 'patient',
     }
+  },
+
+  computed: {
+    roleTitle() {
+      return this.selectedRole.charAt(0).toUpperCase() + this.selectedRole.slice(1)
+    },
   },
 
   methods: {
@@ -89,6 +103,7 @@ export default {
 
         // Save JWT token
         localStorage.setItem('access_token', res.data.access_token)
+        localStorage.setItem('user_role', String(res.data.role || ''))
 
         alert(res.data.message)
 

@@ -24,6 +24,29 @@
     <div class="container py-4">
       <h2 class="mb-4">Patient Dashboard</h2>
 
+      <div class="card shadow-sm mb-4">
+        <div class="card-body">
+          <div class="d-flex justify-content-between align-items-center flex-wrap gap-3 mb-3">
+            <div>
+              <h5 class="mb-1">Quick Access</h5>
+              <p class="mb-0 text-muted">Open the main Health Guardian+ patient modules.</p>
+            </div>
+          </div>
+          <div class="d-flex flex-wrap gap-2">
+            <router-link to="/patient/profile" class="btn btn-outline-secondary btn-sm">Profile</router-link>
+            <router-link to="/patient/medical-records" class="btn btn-outline-secondary btn-sm">Medical Records</router-link>
+            <router-link to="/patient/reports" class="btn btn-outline-secondary btn-sm">Reports</router-link>
+            <router-link to="/patient/appointment-booking" class="btn btn-outline-secondary btn-sm">Book Appointment</router-link>
+            <router-link to="/patient/my-appointments" class="btn btn-outline-secondary btn-sm">My Appointments</router-link>
+            <router-link to="/patient/medicine-reminder" class="btn btn-outline-secondary btn-sm">Medicine Reminder</router-link>
+            <router-link to="/patient/emergency-sos" class="btn btn-outline-secondary btn-sm">Emergency SOS</router-link>
+            <router-link to="/patient/ai-health-assistant" class="btn btn-outline-secondary btn-sm">AI Assistant</router-link>
+            <router-link to="/patient/accessibility" class="btn btn-outline-secondary btn-sm">Accessibility</router-link>
+            <router-link to="/patient/health-card" class="btn btn-outline-secondary btn-sm">Health Card</router-link>
+          </div>
+        </div>
+      </div>
+
       <div v-if="loading" class="alert alert-info">Loading dashboard...</div>
       <div v-if="error" class="alert alert-danger">{{ error }}</div>
 
@@ -127,6 +150,15 @@
                 </option>
               </select>
             </div>
+            <div class="col-md-4 d-flex align-items-end">
+              <button
+                class="btn btn-outline-primary w-100"
+                :disabled="!selectedDoctorId"
+                @click="openDoctorProfile"
+              >
+                Open Doctor Profile
+              </button>
+            </div>
           </div>
 
           <div v-if="filteredSlots.length" class="table-responsive">
@@ -229,6 +261,13 @@ export default {
     logout() {
       localStorage.removeItem('access_token')
       this.$router.push('/login')
+    },
+    openDoctorProfile() {
+      if (!this.selectedDoctorId) {
+        return
+      }
+
+      this.$router.push({ name: 'patient-doctor-profile', params: { id: this.selectedDoctorId } })
     },
     async loadDashboard() {
       const token = localStorage.getItem('access_token')

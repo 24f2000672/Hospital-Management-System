@@ -25,6 +25,15 @@
     <div class="container mt-5">
       <h2 class="mb-4">👨‍⚕️ Doctor Dashboard</h2>
 
+      <div class="card shadow-sm mb-4">
+        <div class="card-body d-flex flex-wrap gap-2">
+          <button class="btn btn-outline-secondary btn-sm" @click="manageSlots">Manage Slots</button>
+          <router-link to="/doctor/patient-history" class="btn btn-outline-secondary btn-sm">Patient History</router-link>
+          <router-link to="/doctor/monthly-reports" class="btn btn-outline-secondary btn-sm">Monthly Reports</router-link>
+          <router-link to="/doctor/telemedicine" class="btn btn-outline-secondary btn-sm">Telemedicine</router-link>
+        </div>
+      </div>
+
       <!-- Today's Appointments -->
       <div class="card mb-4 shadow">
         <div class="card-header bg-primary text-white">

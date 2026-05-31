@@ -1,263 +1,134 @@
-# Hospital Management System
+# Health Guardian+
 
-This project is a full-stack Hospital Management System with:
+Health Guardian+ is a smart healthcare, emergency assistance, and accessibility platform built with a Flask backend and a Vue frontend. It supports three user roles and combines healthcare management with emergency response, health monitoring, and inclusive access features.
 
-- Backend: Flask + Flask-RESTful + SQLAlchemy + JWT
-- Frontend: Vue 3 + Vite + Bootstrap
+## Core Users
 
-It supports role-based access for Admin, Doctor, and Patient.
+- Patient: appointments, medical records, SOS alerts, reminders, health reports, and accessibility tools
+- Doctor: appointment handling, prescriptions, treatment history, patient tracking, and telemedicine support
+- Administrator: user management, analytics, SOS monitoring, security, and hospital oversight
 
-## Quick Start (Copy-paste these in 5 terminals)
+## Key Capabilities
 
-**Terminal 1 - Redis:**
-```bash
-sudo apt update
-sudo apt install redis-server -y
-redis-server --daemonize yes && redis-cli ping
-```
+- Smart appointment booking and slot management
+- Emergency SOS with GPS sharing and contact notifications
+- Personal health records and document storage
+- AI-assisted symptom checking and basic health recommendations
+- Medicine reminders and adherence tracking
+- Accessibility support for blind, deaf, mute, elderly, and specially-abled users
+- Telemedicine workflows and digital prescriptions
+- Analytics dashboards for appointments, treatment trends, and performance tracking
 
-**Terminal 2 - Backend API:**
-```bash
-cd /workspaces/Hospital-Management-System/backend
-source mad2venv/bin/activate
-python app.py
-```
-Backend runs on `http://127.0.0.1:5000`
+## Tech Stack
 
-**Terminal 3 - Frontend Dashboard:**
-```bash
-cd /workspaces/Hospital-Management-System/frontend
-npm run dev
-```
-Frontend runs on `http://localhost:5173`
-
-**Terminal 4 - Celery Worker (for daily email reminders):**
-```bash
-cd /workspaces/Hospital-Management-System/backend
-source mad2venv/bin/activate
-export SMTP_HOST=127.0.0.1
-export SMTP_PORT=1025
-export SMTP_FROM_EMAIL=admin@hospital.local
-export SMTP_USE_TLS=false
-docker start mailhog || docker run -d --name mailhog -p 1025:1025 -p 8025:8025 mailhog/mailhog
-celery -A celery_app.celery worker --loglevel=info
-```
-**Terminal 5 - Celery Beat (scheduler):**
-```bash
-cd /workspaces/Hospital-Management-System/backend
-source mad2venv/bin/activate
-celery -A celery_app.celery beat --loglevel=info
-```
-
-**View captured emails at:** `http://127.0.0.1:8025`
-**Login:** Admin@123 / hospiadmin123
+- Backend: Python, Flask, Flask RESTful, SQLAlchemy, JWT authentication
+- Database: SQLite now, PostgreSQL later
+- Frontend: Vue.js, Ionic Framework, HTML, CSS, JavaScript
+- Mobile: Ionic Vue, Capacitor, Android Studio
+- Services: GPS, SMS, push notifications, accessibility APIs, AI assistant integration
 
 ## Project Structure
 
-- `backend/` contains the Flask API and database models.
-- `frontend/` contains the Vue application.
+- `backend/` contains the Flask API, models, tasks, and background jobs.
+- `frontend/` contains the Vue application and UI views.
 
 ## Prerequisites
 
-- Python 3.10+ (3.12 works)
+- Python 3.10+
 - Node.js 18+ and npm
+- Redis if you want Celery reminders and scheduled jobs
 
 ## Backend Setup
 
-1. Move to the backend folder:
+1. Go to the backend folder.
 
-    ```bash
-    cd backend
-    ```
+  ```bash
+  cd backend
+  ```
 
-2. Create a virtual environment (if needed):
+2. Create and activate a virtual environment if needed.
 
-    ```bash
-    python -m venv mad2venv
-    ```
+  ```bash
+  python -m venv mad2venv
+  source mad2venv/bin/activate
+  ```
 
-3. Activate the virtual environment:
+3. Install Python dependencies.
 
-    ```bash
-    source mad2venv/bin/activate
-    ```
+  ```bash
+  pip install -r requirements.txt
+  ```
 
-4. Install dependencies:
+4. Start the backend.
 
-    ```bash
-    pip install -r requirements.txt
-    ```
+  ```bash
+  python app.py
+  ```
 
-5. Run the backend server:
-
-    ```bash
-    python app.py
-    ```
-
-The backend runs on `http://127.0.0.1:5000`.
+The API runs at `http://127.0.0.1:5000`.
 
 ## Frontend Setup
 
-1. Open a new terminal and move to frontend:
-
-    ```bash
-    cd frontend
-    ```
-
-2. Install dependencies:
-
-    ```bash
-    npm install
-    ```
-
-3. Start the development server:
-
-    ```bash
-    npm run dev
-    ```
-
-The frontend usually runs on `http://localhost:5173`.
-
-## Authentication and Roles
-
-- JWT authentication is enabled.
-- Role-based dashboards:
-  - Admin
-  - Doctor
-  - Patient
-
-When the backend starts for the first time, it creates a default admin user:
-
-- Email: `Admin@123`
-- Password: `hospiadmin123`
-
-## Useful Notes
-
-- If you run commands from the project root, the backend venv path is:
+1. Go to the frontend folder.
 
   ```bash
-  source backend/mad2venv/bin/activate
+  cd frontend
   ```
 
-- To regenerate Python requirements after new installs:
+2. Install dependencies.
 
   ```bash
-  pip freeze > requirements.txt
+  npm install
   ```
 
-## Background Jobs (Celery + Redis)
+3. Start the development server.
 
-This project now includes background jobs for:
+  ```bash
+  npm run dev
+  ```
 
-- Daily same-day appointment reminders (Email/GChat/SMS placeholders)
-- Monthly doctor reports (HTML files)
-- Patient-triggered async CSV export for treatment history
+The frontend usually runs at `http://localhost:5173`.
 
-### Install backend job dependencies
+## Background Jobs
 
-```bash
-cd backend
-source mad2venv/bin/activate
-pip install celery redis
-```
+The backend includes Celery-based background jobs for reminders, monthly reports, and async exports.
 
-### Start Redis
-
-If Redis is installed locally:
+### Redis
 
 ```bash
 redis-server
 ```
 
-### Run Celery Worker
-
-From `backend/`:
+### Celery Worker
 
 ```bash
+cd backend
+source mad2venv/bin/activate
 celery -A celery_app.celery worker --loglevel=info
 ```
 
-### Run Celery Beat (Scheduler)
-
-From `backend/` in a separate terminal:
+### Celery Beat
 
 ```bash
+cd backend
+source mad2venv/bin/activate
 celery -A celery_app.celery beat --loglevel=info
 ```
 
-### Automatic Daily Appointment Reminders
-
-To send appointment reminders automatically every day:
-
-1. Start the Celery worker (processes jobs):
-   ```bash
-   cd backend
-   source mad2venv/bin/activate
-   celery -A celery_app.celery worker --loglevel=info
-   ```
-
-2. Start the Celery beat scheduler (triggers jobs on schedule):
-   ```bash
-   cd backend
-   source mad2venv/bin/activate
-   celery -A celery_app.celery beat --loglevel=info
-   ```
-
-3. (Optional) Configure SMTP and reminder time:
-   ```bash
-   export SMTP_HOST=127.0.0.1
-   export SMTP_PORT=1025
-   export SMTP_FROM_EMAIL=admin@hospital.local
-   export DAILY_REMINDER_HOUR=8
-   export DAILY_REMINDER_MINUTE=0
-   export REMINDER_DAYS_AHEAD=1
-   ```
-
-**Scheduled Jobs**
-
-- Daily reminder job: `tasks.send_same_day_appointment_reminders` (every day at 8:00 AM)
-  - Sends emails to patients with appointments **tomorrow** (default: `REMINDER_DAYS_AHEAD=1`)
-  - Change to `REMINDER_DAYS_AHEAD=0` for today's appointments
-- Monthly report job: `tasks.generate_monthly_doctor_reports` (1st of each month, 2:00 AM)
-
-### SMTP Email Configuration for Daily Reminders
-
-To send real emails from reminder jobs, set before starting worker/beat:
+### MailHog for local email testing
 
 ```bash
-export SMTP_HOST=smtp.gmail.com
-export SMTP_PORT=587
-export SMTP_USER=admin@example.com
-export SMTP_PASSWORD=your_app_password
-export SMTP_FROM_EMAIL=admin@example.com
-export SMTP_USE_TLS=true
-export SMTP_USE_SSL=false
-```
-
-Or use MailHog (fake inbox for testing):
-
-```bash
-# Start MailHog
 docker run -d --name mailhog -p 1025:1025 -p 8025:8025 mailhog/mailhog
-
-# Set SMTP to MailHog
-export SMTP_HOST=127.0.0.1
-export SMTP_PORT=1025
-export SMTP_FROM_EMAIL=admin@hospital.local
-export SMTP_USE_TLS=false
-export SMTP_USE_SSL=false
 ```
 
-View captured emails at `http://127.0.0.1:8025`
+View captured mail at `http://127.0.0.1:8025`.
 
-Monthly reports are generated under:
+## Default Admin Login
 
-- `backend/instance/reports/<YYYY-MM>/`
+- Email: `Admin@123`
+- Password: `hospiadmin123`
 
-### Async CSV Export API (Patient)
+## Notes
 
-- Start export: `POST /patient/export-treatment-history`
-- Check status: `GET /patient/export-treatment-history/<job_id>`
-- Download when completed: `GET /patient/export-treatment-history/<job_id>/download`
-
-The Patient Dashboard includes an "Export Treatment History (CSV)" button that starts the job and polls until completion.
+- If you run commands from the repo root, activate the backend venv with `source backend/mad2venv/bin/activate`.
+- Celery jobs are configured in `backend/celery_app.py` and task handlers live in `backend/tasks.py`.
