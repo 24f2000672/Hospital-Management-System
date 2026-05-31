@@ -31,6 +31,11 @@ const router = createRouter({
       component: () => import('../views/Patient/Dashboard.vue'),
     },
     {
+      path: '/patient/tabs',
+      name: 'patient-tabs',
+      component: () => import('../views/Patient/MobileTabsView.vue'),
+    },
+    {
       path: '/patient/profile',
       name: 'patient-profile',
       component: () => import('../views/Shared/ModuleWorkspace.vue'),

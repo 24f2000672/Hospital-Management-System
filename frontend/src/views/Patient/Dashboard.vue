@@ -31,6 +31,7 @@
               <h5 class="mb-1">Quick Access</h5>
               <p class="mb-0 text-muted">Open the main Health Guardian+ patient modules.</p>
             </div>
+            <router-link to="/patient/tabs" class="btn btn-primary btn-sm">Open Mobile Tabs</router-link>
           </div>
           <div class="d-flex flex-wrap gap-2">
             <router-link to="/patient/profile" class="btn btn-outline-secondary btn-sm">Profile</router-link>
@@ -49,6 +50,36 @@
 
       <div v-if="loading" class="alert alert-info">Loading dashboard...</div>
       <div v-if="error" class="alert alert-danger">{{ error }}</div>
+
+      <div class="row g-3 mb-4">
+        <div class="col-md-4">
+          <div class="card shadow-sm h-100">
+            <div class="card-body">
+              <p class="text-muted mb-1">Health Score</p>
+              <h3 class="mb-2">{{ healthScore }}/100</h3>
+              <p class="mb-0 text-muted">A simple readiness score based on profile, appointments, and reminders.</p>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-4">
+          <div class="card shadow-sm h-100">
+            <div class="card-body">
+              <p class="text-muted mb-1">Reminder Count</p>
+              <h3 class="mb-2">{{ reminderCount }}</h3>
+              <p class="mb-0 text-muted">Active medicine reminders visible from the mobile tabs.</p>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-4">
+          <div class="card shadow-sm h-100">
+            <div class="card-body">
+              <p class="text-muted mb-1">Emergency Ready</p>
+              <h3 class="mb-2">{{ emergencyReady ? 'Yes' : 'No' }}</h3>
+              <p class="mb-0 text-muted">Based on whether emergency contacts and accessibility settings exist.</p>
+            </div>
+          </div>
+        </div>
+      </div>
 
       <div class="card mb-4 shadow">
         <div class="card-header bg-primary text-white">
@@ -221,6 +252,9 @@ export default {
       doctors: [],
       departments: [],
       availableSlots: [],
+      medicineReminders: [],
+      emergencyContacts: [],
+      accessibilitySettings: null,
       exporting: false,
       exportStatus: '',
       exportJobId: null,
@@ -231,6 +265,19 @@ export default {
     }
   },
   computed: {
+    healthScore() {
+      let score = 50
+      score += Math.min(this.upcomingAppointments.length * 8, 20)
+      score += Math.min(this.medicineReminders.length * 4, 15)
+      score += Math.min(this.emergencyContacts.length * 3, 10)
+      return Math.max(0, Math.min(100, score))
+    },
+    reminderCount() {
+      return this.medicineReminders.length
+    },
+    emergencyReady() {
+      return this.emergencyContacts.length > 0 && Boolean(this.accessibilitySettings)
+    },
     filteredSlots() {
       if (!this.selectedDoctorId) {
         return this.availableSlots
@@ -279,13 +326,22 @@ export default {
       this.loading = true
       this.error = ''
       try {
-        const [dashboardResp, slotsResp] = await Promise.all([
+        const [dashboardResp, slotsResp, remindersResp, contactsResp, accessibilityResp] = await Promise.all([
           axios.get('http://127.0.0.1:5000/patient/dashboard', {
             headers: this.tokenHeaders(),
           }),
           axios.get('http://127.0.0.1:5000/patient/available-slots', {
             headers: this.tokenHeaders(),
           }),
+          axios.get('http://127.0.0.1:5000/patient/medicine-reminders', {
+            headers: this.tokenHeaders(),
+          }),
+          axios.get('http://127.0.0.1:5000/patient/emergency-contacts', {
+            headers: this.tokenHeaders(),
+          }),
+          axios.get('http://127.0.0.1:5000/patient/accessibility-settings', {
+            headers: this.tokenHeaders(),
+          }).catch(() => ({ data: null })),
         ])
 
         this.upcomingAppointments = dashboardResp.data.upcoming_appointments || []
@@ -293,6 +349,9 @@ export default {
         this.doctors = dashboardResp.data.doctors || []
         this.departments = dashboardResp.data.departments || []
         this.availableSlots = this.normalizeAvailableSlotsResponse(slotsResp.data)
+        this.medicineReminders = remindersResp.data?.reminders || []
+        this.emergencyContacts = contactsResp.data?.contacts || []
+        this.accessibilitySettings = accessibilityResp.data || null
       } catch (err) {
         console.error(err)
         this.error = 'Unable to load patient dashboard data.'
