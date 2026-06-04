@@ -16,7 +16,18 @@ from models import (
     Department,
     Doctor,
     Patient,
-    Appointment
+    Appointment,
+    User,
+    MedicalRecord,
+    HealthReport,
+    VitalSigns,
+    EmergencyContact,
+    MedicineReminder,
+    SOSLog,
+    EmergencyAlert,
+    SymptomCheck,
+    HealthRiskAssessment,
+    VideoConsultation
 )
 from cache import cache_response, invalidate_cache
 

@@ -1,50 +1,80 @@
-.glass-page{
-min-height:100vh;
-padding:30px;
-background:
-radial-gradient(circle at top left,#2dd4bf40,transparent),
-radial-gradient(circle at top right,#f9731640,transparent),
-linear-gradient(
-160deg,
-#08111f,
-#0f2a3b,
-#123b52
-);
-color:white;
+html,
+body,
+#app {
+  min-height: 100vh;
+  margin: 0;
 }
 
-.glass-card{
-background:rgba(255,255,255,0.08);
-backdrop-filter:blur(20px);
-border-radius:24px;
-padding:20px;
-border:1px solid rgba(255,255,255,0.1);
-margin-bottom:20px;
+body {
+  background:
+    radial-gradient(circle at top left, #2dd4bf40, transparent),
+    radial-gradient(circle at top right, #f9731640, transparent),
+    linear-gradient(
+      160deg,
+      #08111f,
+      #0f2a3b,
+      #123b52
+    );
+  color: white;
 }
 
-.metric-box{
-background:rgba(255,255,255,0.08);
-padding:30px;
-border-radius:24px;
-text-align:center;
+/* All cards */
+.card {
+  background: rgba(255, 255, 255, 0.08) !important;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  border-radius: 24px !important;
+
+  color: white;
+  margin-bottom: 20px;
 }
 
-.metric-box h3{
-font-size:40px;
-font-weight:bold;
+/* Card headers */
+.card-header {
+  background: transparent !important;
+  color: white !important;
+  border-bottom: 1px solid rgba(255,255,255,0.1) !important;
 }
 
-.room-card{
-background:rgba(255,255,255,0.08);
-padding:20px;
-border-radius:20px;
-text-align:center;
-margin-bottom:20px;
+/* Tables */
+.table {
+  color: white !important;
 }
 
-.page-header{
-display:flex;
-justify-content:space-between;
-align-items:center;
-margin-bottom:25px;
+.table th,
+.table td {
+  border-color: rgba(255,255,255,0.1) !important;
+}
+
+/* Inputs */
+input,
+select,
+textarea {
+  background: rgba(255,255,255,0.08) !important;
+  color: white !important;
+  border: 1px solid rgba(255,255,255,0.15) !important;
+  border-radius: 12px !important;
+}
+
+/* Buttons */
+.btn {
+  border-radius: 12px !important;
+}
+
+/* Headings */
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  color: white;
+}
+
+/* Bootstrap containers */
+.container,
+.container-fluid {
+  padding-top: 20px;
 }

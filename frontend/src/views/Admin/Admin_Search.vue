@@ -1,11 +1,4 @@
 <template>
-  <div
-    class="search-results-page"
-    style="
-      background: linear-gradient(to right, #ccccff, #66ccff, #ff8566, #ccccff, #ff8566);
-      min-height: 100vh;
-    "
-  >
     <!-- Header -->
     <header
       style="background-color: white"
@@ -87,7 +80,6 @@
         >⬅️ Back to Dashboard</router-link
       >
     </div>
-  </div>
 </template>
 
 <script>

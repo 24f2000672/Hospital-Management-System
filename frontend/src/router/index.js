@@ -276,7 +276,7 @@ const router = createRouter({
     {
       path: '/admin/patients',
       name: 'admin-patients',
-      component: () => import('../views/Admin/Patients.vue'),
+      component: () => import('../views/Admin/PatientsManagement.vue'),
     },
     {
       path: '/admin/update-patient',

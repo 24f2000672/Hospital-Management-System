@@ -139,10 +139,6 @@ export default {
 </script>
 
 <style>
-.login-page {
-  min-height: 100vh;
-  background: linear-gradient(to right, #ccccff, #66ccff, #ff8566, #ccccff, #ff8566);
-}
 
 /* SCROLL BANNER */
 .scroll-container {
