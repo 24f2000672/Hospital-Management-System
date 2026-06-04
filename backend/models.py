@@ -176,6 +176,7 @@ class EmergencyContact(db.Model):
 
 
 class SOSLog(db.Model):
+    __tablename__ = 'sos_log'
     id = db.Column(db.Integer, primary_key=True)
     patient_id = db.Column(db.Integer, db.ForeignKey('patient.id'), nullable=False)
     latitude = db.Column(db.Float, nullable=False)
@@ -187,8 +188,9 @@ class SOSLog(db.Model):
 
 
 class EmergencyAlert(db.Model):
+    __tablename__ = 'emergency_alert'
     id = db.Column(db.Integer, primary_key=True)
-    sos_log_id = db.Column(db.Integer, db.ForeignKey('s_o_s_log.id'), nullable=False)
+    sos_log_id = db.Column(db.Integer, db.ForeignKey('sos_log.id'), nullable=False)
     alert_type = db.Column(db.String(50), nullable=False)
     response_status = db.Column(db.String(30), default='PENDING')
     contact_notified = db.Column(db.String(100))
@@ -313,3 +315,113 @@ class Billing(db.Model):
 
     patient = db.relationship('Patient', backref='billings')
     admission = db.relationship('Admission', backref='billings')
+class VaccinationRecord(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    patient_id = db.Column(
+        db.Integer,
+        db.ForeignKey('patient.id'),
+        nullable=False
+    )
+
+    vaccine_name = db.Column(db.String(100))
+    dose_number = db.Column(db.Integer)
+    vaccination_date = db.Column(db.Date)
+    next_due_date = db.Column(db.Date)
+
+    patient = db.relationship(
+        'Patient',
+        backref='vaccinations'
+    )
+class LabTest(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+
+    patient_id = db.Column(
+        db.Integer,
+        db.ForeignKey('patient.id')
+    )
+
+    doctor_id = db.Column(
+        db.Integer,
+        db.ForeignKey('doctor.id')
+    )
+
+    test_name = db.Column(db.String(100))
+    result = db.Column(db.Text)
+    status = db.Column(db.String(30))
+    test_date = db.Column(db.DateTime)
+
+    patient = db.relationship(
+        'Patient',
+        backref='lab_tests'
+    )
+
+    doctor = db.relationship(
+        'Doctor',
+        backref='lab_tests'
+    )
+class AmbulanceRequest(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+
+    patient_id = db.Column(
+        db.Integer,
+        db.ForeignKey('patient.id')
+    )
+
+    latitude = db.Column(db.Float)
+    longitude = db.Column(db.Float)
+
+    status = db.Column(
+        db.String(30),
+        default='REQUESTED'
+    )
+
+    requested_at = db.Column(
+        db.DateTime,
+        default=datetime.utcnow
+    )
+
+    patient = db.relationship(
+        'Patient',
+        backref='ambulance_requests'
+    )
+class HealthGoal(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+
+    patient_id = db.Column(
+        db.Integer,
+        db.ForeignKey('patient.id')
+    )
+
+    goal_name = db.Column(db.String(100))
+    target_value = db.Column(db.Float)
+    current_value = db.Column(db.Float)
+
+    status = db.Column(
+        db.String(20),
+        default='ACTIVE'
+    )
+
+    patient = db.relationship(
+        'Patient',
+        backref='health_goals'
+    )
+class AIHealthAssistant(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+
+    patient_id = db.Column(
+        db.Integer,
+        db.ForeignKey('patient.id')
+    )
+
+    question = db.Column(db.Text)
+    response = db.Column(db.Text)
+
+    created_at = db.Column(
+        db.DateTime,
+        default=datetime.utcnow
+    )
+
+    patient = db.relationship(
+        'Patient',
+        backref='ai_queries'
+    )

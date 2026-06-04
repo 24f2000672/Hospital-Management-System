@@ -1,0 +1,50 @@
+.glass-page{
+min-height:100vh;
+padding:30px;
+background:
+radial-gradient(circle at top left,#2dd4bf40,transparent),
+radial-gradient(circle at top right,#f9731640,transparent),
+linear-gradient(
+160deg,
+#08111f,
+#0f2a3b,
+#123b52
+);
+color:white;
+}
+
+.glass-card{
+background:rgba(255,255,255,0.08);
+backdrop-filter:blur(20px);
+border-radius:24px;
+padding:20px;
+border:1px solid rgba(255,255,255,0.1);
+margin-bottom:20px;
+}
+
+.metric-box{
+background:rgba(255,255,255,0.08);
+padding:30px;
+border-radius:24px;
+text-align:center;
+}
+
+.metric-box h3{
+font-size:40px;
+font-weight:bold;
+}
+
+.room-card{
+background:rgba(255,255,255,0.08);
+padding:20px;
+border-radius:20px;
+text-align:center;
+margin-bottom:20px;
+}
+
+.page-header{
+display:flex;
+justify-content:space-between;
+align-items:center;
+margin-bottom:25px;
+}
