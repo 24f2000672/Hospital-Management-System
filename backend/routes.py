@@ -7,31 +7,16 @@ from flask import request, send_file
 from flask_restful import Api, Resource
 from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity
 from sqlalchemy import distinct, or_
+from flask import jsonify, request
 from models import (
-    User,
     db,
-    Patient,
-    Doctor,
-    Department,
-    Appointment,
-    Treatment,
-    ExportJob,
-    MedicalRecord,
-    HealthReport,
-    VitalSigns,
-    EmergencyContact,
-    SOSLog,
-    EmergencyAlert,
-    MedicineReminder,
-    MedicationHistory,
-    SymptomCheck,
-    HealthRiskAssessment,
-    AccessibilitySettings,
-    VideoConsultation,
-    ChatMessage,
     Room,
     Admission,
     Billing,
+    Department,
+    Doctor,
+    Patient,
+    Appointment
 )
 from cache import cache_response, invalidate_cache
 
@@ -2288,123 +2273,163 @@ class Search(Resource):
         patients = [{"id": p.id, "first_name": p.first_name, "last_name": p.last_name, "email": p.email} for p in patient_results]
 
         return {"doctors": doctors, "patients": patients}, 200
-@app.route('/admin/rooms')
-def get_rooms():
-    rooms = Room.query.all()
 
-    return jsonify([
-        {
-            "id":r.id,
-            "room_number":r.room_number,
-            "type":r.type,
-            "status":r.status
+class RoomListResource(Resource):
+
+    def get(self):
+        rooms = Room.query.all()
+        return [
+            {
+                "id": room.id,
+                "room_number": room.room_number,
+                "type": room.type,
+                "status": room.status,
+                "notes": room.notes
+            }
+            for room in rooms
+        ]
+
+    def post(self):
+        data = request.json
+
+        room = Room(
+            room_number=data["room_number"],
+            type=data["type"],
+            status="AVAILABLE"
+        )
+
+        db.session.add(room)
+        db.session.commit()
+
+        return {"message": "Room added successfully"}
+
+class AdmissionResource(Resource):
+
+    def get(self):
+        admissions = Admission.query.all()
+
+        return [
+            {
+                "id": a.id,
+                "patient": f"{a.patient.first_name} {a.patient.last_name}",
+                "room": a.room.room_number,
+                "date": a.admission_date.strftime("%d-%m-%Y"),
+                "status": a.status
+            }
+            for a in admissions
+        ]
+
+    def post(self):
+        data = request.json
+
+        admission = Admission(
+            patient_id=data["patient_id"],
+            room_id=data["room_id"]
+        )
+
+        room = Room.query.get(data["room_id"])
+        if room:
+            room.status = "OCCUPIED"
+
+        db.session.add(admission)
+        db.session.commit()
+
+        return {"message": "Admission created"}
+    
+class BillingResource(Resource):
+
+    def get(self):
+        bills = Billing.query.all()
+
+        return [
+            {
+                "id": b.id,
+                "patient": f"{b.patient.first_name} {b.patient.last_name}",
+                "consultation_fees": b.consultation_fees,
+                "medicine_fees": b.medicine_fees,
+                "total_amount": b.total_amount,
+                "status": b.status
+            }
+            for b in bills
+        ]
+
+    def post(self):
+        data = request.json
+
+        total = float(data["consultation_fees"]) + float(data["medicine_fees"])
+
+        bill = Billing(
+            patient_id=data["patient_id"],
+            consultation_fees=data["consultation_fees"],
+            medicine_fees=data["medicine_fees"],
+            total_amount=total,
+            status="PENDING"
+        )
+
+        db.session.add(bill)
+        db.session.commit()
+
+        return {"message": "Bill created"}
+
+class DepartmentResource(Resource):
+
+    def get(self):
+        departments = Department.query.all()
+
+        return [
+            {
+                "id": d.id,
+                "name": d.name,
+                "description": d.description
+            }
+            for d in departments
+        ]
+
+    def post(self):
+        data = request.json
+
+        dept = Department(
+            name=data["name"],
+            description=data["description"]
+        )
+
+        db.session.add(dept)
+        db.session.commit()
+
+        return {"message": "Department created"}
+
+class AnalyticsResource(Resource):
+
+    def get(self):
+        return {
+            "totalDoctors": Doctor.query.count(),
+            "totalPatients": Patient.query.count(),
+            "totalAppointments": Appointment.query.count(),
+            "totalRevenue": db.session.query(db.func.sum(Billing.total_amount)).scalar() or 0
         }
-        for r in rooms
-    ])
-@app.route('/admin/rooms', methods=['POST'])
-def add_room():
 
-    data = request.json
+class ReportsResource(Resource):
 
-    room = Room(
-        room_number=data['room_number'],
-        type=data['type'],
-        status='AVAILABLE'
-    )
-
-    db.session.add(room)
-    db.session.commit()
-
-    return jsonify({"message":"Room Added"})
-@app.route('/admin/admissions')
-def admissions():
-
-    admissions = Admission.query.all()
-
-    return jsonify([
-        {
-            "id":a.id,
-            "patient":a.patient.first_name,
-            "room":a.room.room_number,
-            "status":a.status
+    def get(self):
+        return {
+            "patients": Patient.query.count(),
+            "doctors": Doctor.query.count(),
+            "appointments": Appointment.query.count(),
+            "revenue": db.session.query(db.func.sum(Billing.total_amount)).scalar() or 0
         }
-        for a in admissions
-    ])
-@app.route('/admin/admissions', methods=['POST'])
-def admit_patient():
 
-    data = request.json
+class DashboardStatsResource(Resource):
 
-    admission = Admission(
-        patient_id=data['patient_id'],
-        room_id=data['room_id']
-    )
-
-    room = Room.query.get(data['room_id'])
-    room.status="OCCUPIED"
-
-    db.session.add(admission)
-    db.session.commit()
-
-    return jsonify({"message":"Patient Admitted"})
-@app.route('/admin/billing')
-def get_bills():
-
-    bills = Billing.query.all()
-
-    return jsonify([
-        {
-            "id":b.id,
-            "patient":b.patient.first_name,
-            "amount":b.total_amount,
-            "status":b.status
+    def get(self):
+        return {
+            "doctors": Doctor.query.count(),
+            "patients": Patient.query.count(),
+            "appointments": Appointment.query.count(),
+            "rooms": Room.query.count(),
+            "admissions": Admission.query.count(),
+            "revenue": db.session.query(db.func.sum(Billing.total_amount)).scalar() or 0
         }
-        for b in bills
-    ])
-@app.route('/admin/billing', methods=['POST'])
-def create_bill():
 
-    data=request.json
-
-    total = (
-        data['consultation_fees']
-        + data['medicine_fees']
-    )
-
-    bill = Billing(
-        patient_id=data['patient_id'],
-        consultation_fees=data['consultation_fees'],
-        medicine_fees=data['medicine_fees'],
-        total_amount=total
-    )
-
-    db.session.add(bill)
-    db.session.commit()
-
-    return jsonify({"message":"Bill Created"})
-@app.route('/admin/analytics')
-def analytics():
-
-    return jsonify({
-
-        "doctors":Doctor.query.count(),
-
-        "patients":Patient.query.count(),
-
-        "appointments":Appointment.query.count(),
-
-        "rooms":Room.query.count(),
-
-        "occupied_rooms":
-            Room.query.filter_by(
-                status="OCCUPIED"
-            ).count(),
-
-        "active_sos":
-            SOSLog.query.filter_by(
-                status="ACTIVE"
-            ).count()
-    })
 
 # all Api Routes
 api.add_resource(AdminDashboard, "/admin/dashboard")
@@ -2452,3 +2477,11 @@ api.add_resource(AdminAdmissionResource, "/admin/admissions")
 api.add_resource(AdminAdmissionItemResource, "/admin/admissions/<int:admission_id>")
 api.add_resource(AdminBillingResource, "/admin/billing")
 api.add_resource(AdminBillingItemResource, "/admin/billing/<int:bill_id>")
+api.add_resource(RoomListResource, "/admin/rooms")
+api.add_resource(AdmissionResource, "/admin/admissions")
+api.add_resource(BillingResource, "/admin/billing")
+api.add_resource(DepartmentResource, "/admin/departments")
+
+api.add_resource(AnalyticsResource, "/admin/analytics")
+api.add_resource(ReportsResource, "/admin/reports")
+api.add_resource(DashboardStatsResource, "/admin/dashboard-stats")
