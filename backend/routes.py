@@ -3,11 +3,13 @@ from collections import Counter
 import glob
 import html
 import os
+from sqlalchemy import func
 from flask import request, send_file
 from flask_restful import Api, Resource
 from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity
 from sqlalchemy import distinct, or_
 from flask import jsonify, request
+from models import AccessibilitySettings    
 from models import (
     db,
     Room,
@@ -27,7 +29,8 @@ from models import (
     EmergencyAlert,
     SymptomCheck,
     HealthRiskAssessment,
-    VideoConsultation
+    VideoConsultation,
+    Treatment
 )
 from cache import cache_response, invalidate_cache
 
@@ -288,6 +291,7 @@ def _cleanup_room_after_admission(room_id):
         room.status = "AVAILABLE"
     return room
 
+print("🔥 FILE LOADED: analytics module", flush=True)
 
 class PatientMedicalRecordResource(Resource):
     @jwt_required()
@@ -564,54 +568,59 @@ class PatientMedicineReminderResource(Resource):
 
         return {"message": "Medicine reminder saved", "id": reminder.id}, 201
 
-
 class PatientAccessibilitySettingsResource(Resource):
+
     @jwt_required()
     def get(self):
-        current_user, error = _current_user_or_403(3)
-        if error:
-            return error
+        patient_id = get_jwt_identity()
 
-        patient_record = _patient_record_for_user(current_user)
-        if not patient_record:
-            return {"message": "Patient record not found"}, 404
+        settings = AccessibilitySettings.query.filter_by(
+            patient_id=patient_id
+        ).first()
 
-        settings = AccessibilitySettings.query.filter_by(patient_id=patient_record.id).first()
         if not settings:
-            return {"message": "No accessibility settings found"}, 404
+            return {
+                "voice_mode": "N",
+                "high_contrast": "N",
+                "large_text": "N",
+                "sign_language_mode": "N",
+                "vibration_alerts": "N"
+            }, 200
 
         return {
-            "voice_mode": settings.voice_mode == "Y",
-            "high_contrast": settings.high_contrast == "Y",
-            "large_text": settings.large_text == "Y",
-            "sign_language_mode": settings.sign_language_mode == "Y",
-            "vibration_alerts": settings.vibration_alerts == "Y",
+            "voice_mode": settings.voice_mode,
+            "high_contrast": settings.high_contrast,
+            "large_text": settings.large_text,
+            "sign_language_mode": settings.sign_language_mode,
+            "vibration_alerts": settings.vibration_alerts
         }, 200
 
     @jwt_required()
     def put(self):
-        current_user, error = _current_user_or_403(3)
-        if error:
-            return error
-
-        patient_record = _patient_record_for_user(current_user)
-        if not patient_record:
-            return {"message": "Patient record not found"}, 404
-
+        patient_id = get_jwt_identity()
         data = request.get_json() or {}
-        settings = AccessibilitySettings.query.filter_by(patient_id=patient_record.id).first()
+
+        settings = AccessibilitySettings.query.filter_by(
+            patient_id=patient_id
+        ).first()
+
         if not settings:
-            settings = AccessibilitySettings(patient_id=patient_record.id)
+            settings = AccessibilitySettings(
+                patient_id=patient_id
+            )
             db.session.add(settings)
 
-        for field in ["voice_mode", "high_contrast", "large_text", "sign_language_mode", "vibration_alerts"]:
-            if field in data:
-                setattr(settings, field, "Y" if bool(data.get(field)) else "N")
+        settings.voice_mode = data.get("voice_mode", settings.voice_mode)
+        settings.high_contrast = data.get("high_contrast", settings.high_contrast)
+        settings.large_text = data.get("large_text", settings.large_text)
+        settings.sign_language_mode = data.get("sign_language_mode", settings.sign_language_mode)
+        settings.vibration_alerts = data.get("vibration_alerts", settings.vibration_alerts)
 
         db.session.commit()
-        return {"message": "Accessibility settings saved"}, 200
 
-
+        return {
+            "message": "Accessibility settings updated successfully"
+        }, 200
 class PatientSOSLogResource(Resource):
     @jwt_required()
     def get(self):
@@ -2285,34 +2294,6 @@ class Search(Resource):
 
         return {"doctors": doctors, "patients": patients}, 200
 
-class RoomListResource(Resource):
-
-    def get(self):
-        rooms = Room.query.all()
-        return [
-            {
-                "id": room.id,
-                "room_number": room.room_number,
-                "type": room.type,
-                "status": room.status,
-                "notes": room.notes
-            }
-            for room in rooms
-        ]
-
-    def post(self):
-        data = request.json
-
-        room = Room(
-            room_number=data["room_number"],
-            type=data["type"],
-            status="AVAILABLE"
-        )
-
-        db.session.add(room)
-        db.session.commit()
-
-        return {"message": "Room added successfully"}
 
 class AdmissionResource(Resource):
 
@@ -2441,6 +2422,270 @@ class DashboardStatsResource(Resource):
             "revenue": db.session.query(db.func.sum(Billing.total_amount)).scalar() or 0
         }
 
+class EmergencyMonitorAPI(Resource):
+    @jwt_required()
+    def get(self):
+        alerts = EmergencyAlert.query.all()
+
+        return {
+            "alerts": [
+                {
+                    "id": a.id,
+                    "patient_name": a.patient_name,
+                    "location": a.location,
+                    "emergency_type": a.emergency_type,
+                    "time": a.created_at.strftime("%Y-%m-%d %H:%M"),
+                    "status": a.status
+                }
+                for a in alerts
+            ]
+        }
+
+class AdminDoctors(Resource):
+    @jwt_required()
+    def get(self):
+
+        doctors = Doctor.query.all()
+
+        return {
+            "doctors": [
+                {
+                    "id": d.id,
+                    "first_name": d.first_name,
+                    "last_name": d.last_name,
+                    "email": d.email,
+                    "contact": d.contact,
+                    "phone": d.phone,
+                    "experience": d.experience,
+                    "department": d.department.name if d.department else None
+                }
+                for d in doctors
+            ]
+        }, 200
+from models import Doctor, Patient, Appointment
+
+class AdminAnalyticsResource(Resource):
+
+    @jwt_required()
+    def get(self):
+
+        print("🔥 Admin Analytics executed", flush=True)
+
+        try:
+            # ---------------- CORE STATS ----------------
+            total_doctors = Doctor.query.count()
+            total_patients = Patient.query.count()
+            total_appointments = Appointment.query.count()
+
+            # ---------------- REVENUE ----------------
+            total_revenue = db.session.query(
+                func.coalesce(func.sum(Billing.total_amount), 0)
+            ).scalar()
+
+            # ---------------- EXTRA ANALYTICS ----------------
+            total_departments = Department.query.count()
+            total_sos = SOSLog.query.count()
+            total_admissions = Admission.query.filter(
+                Admission.status == "ACTIVE"
+            ).count()
+
+            return {
+                "total_doctors": total_doctors,
+                "total_patients": total_patients,
+                "total_appointments": total_appointments,
+                "total_revenue": float(total_revenue or 0),
+                "total_departments": total_departments,
+                "total_sos": total_sos,
+                "total_admissions": total_admissions,
+            }, 200
+
+        except Exception as e:
+            print("❌ Analytics Error:", str(e), flush=True)
+            return {"msg": "Analytics failed", "error": str(e)}, 500
+class PatientListResource(Resource):
+
+    @jwt_required()
+    def get(self):
+        try:
+            patients = Patient.query.all()
+
+            return [
+                {
+                    "id": p.id,
+                    "first_name": p.first_name,
+                    "last_name": p.last_name,
+                    "age": p.age,
+                    "gender": p.gender,
+                    "phone": p.phone
+                }
+                for p in patients
+            ], 200
+
+        except Exception as e:
+            print("PATIENT LIST ERROR:", e)
+            return {"message": "Server error"}, 500
+
+
+class PatientResource(Resource):
+
+    # ---------------- GET SINGLE PATIENT ----------------
+    @jwt_required()
+    def get(self, id):
+        try:
+            patient = Patient.query.get(id)
+
+            if not patient:
+                return {"message": "Patient not found"}, 404
+
+            return {
+                "id": patient.id,
+                "first_name": patient.first_name,
+                "last_name": patient.last_name,
+                "age": patient.age,
+                "gender": patient.gender,
+                "phone": patient.phone
+            }, 200
+
+        except Exception as e:
+            print("GET ERROR:", e)
+            return {"message": "Server error"}, 500
+
+
+    # ---------------- UPDATE PATIENT ----------------
+    @jwt_required()
+    def put(self, id):
+        try:
+            patient = Patient.query.get(id)
+
+            if not patient:
+                return {"message": "Patient not found"}, 404
+
+            data = request.get_json() or {}
+
+            patient.first_name = data.get("first_name", patient.first_name)
+            patient.last_name = data.get("last_name", patient.last_name)
+            patient.age = data.get("age", patient.age)
+            patient.gender = data.get("gender", patient.gender)
+            patient.phone = data.get("phone", patient.phone)
+
+            db.session.commit()
+
+            return {"message": "Patient updated successfully"}, 200
+
+        except Exception as e:
+            print("UPDATE ERROR:", e)
+            return {"message": "Server error"}, 500
+
+class RoomListResource(Resource):
+
+    @jwt_required()
+    def get(self):
+        rooms = Room.query.all()
+
+        return [
+            {
+                "id": room.id,
+                "room_number": room.room_number,
+                "type": room.type,
+                "capacity": room.capacity,
+                "floor": room.floor,
+                "status": room.status
+            }
+            for room in rooms
+        ], 200
+
+    @jwt_required()
+    def post(self):
+        data = request.get_json() or {}
+
+        room = Room(
+            room_number=data.get("room_number"),
+            type=data.get("type"),
+            capacity=data.get("capacity"),
+            floor=data.get("floor"),
+            status=data.get("status")
+        )
+
+        db.session.add(room)
+        db.session.commit()
+
+        return {"message": "Room created successfully"}, 201
+
+class RoomResource(Resource):
+
+    @jwt_required()
+    def get(self, id):
+        room = Room.query.get(id)
+
+        if not room:
+            return {"message": "Room not found"}, 404
+
+        return {
+            "id": room.id,
+            "room_number": room.room_number,
+            "type": room.type,
+            "capacity": room.capacity,
+            "floor": room.floor,
+            "status": room.status
+        }, 200
+
+    # ---------------- UPDATE ROOM ----------------
+@jwt_required()
+def put(self, id):
+    try:
+        room = Room.query.get(id)
+
+        if not room:
+            return {"message": "Room not found"}, 404
+
+        data = request.get_json() or {}
+
+        room.room_number = data.get("room_number", room.room_number)
+        room.type = data.get("type", room.type)
+        room.capacity = data.get("capacity", room.capacity)
+        room.floor = data.get("floor", room.floor)
+        room.status = data.get("status", room.status)
+
+        db.session.commit()
+
+        return {
+            "message": "Room updated successfully",
+            "room": {
+                "id": room.id,
+                "room_number": room.room_number,
+                "type": room.type,
+                "capacity": room.capacity,
+                "floor": room.floor,
+                "status": room.status
+            }
+        }, 200
+
+    except Exception as e:
+        db.session.rollback()
+        print("UPDATE ROOM ERROR:", e)
+        return {"message": "Server error"}, 500
+
+
+# ---------------- DELETE ROOM ----------------
+@jwt_required()
+def delete(self, id):
+    try:
+        room = Room.query.get(id)
+
+        if not room:
+            return {"message": "Room not found"}, 404
+
+        db.session.delete(room)
+        db.session.commit()
+
+        return {
+            "message": "Room deleted successfully"
+        }, 200
+
+    except Exception as e:
+        db.session.rollback()
+        print("DELETE ROOM ERROR:", e)
+        return {"message": "Server error"}, 500
 
 # all Api Routes
 api.add_resource(AdminDashboard, "/admin/dashboard")
@@ -2478,7 +2723,7 @@ api.add_resource(PatientHealthReportResource, "/patient/health-reports")
 api.add_resource(PatientVitalSignsResource, "/patient/vital-signs")
 api.add_resource(PatientEmergencyContactsResource, "/patient/emergency-contacts")
 api.add_resource(PatientMedicineReminderResource, "/patient/medicine-reminders")
-api.add_resource(PatientAccessibilitySettingsResource, "/patient/accessibility-settings")
+api.add_resource(PatientAccessibilitySettingsResource,"/patient/accessibility-settings")
 api.add_resource(PatientSOSLogResource, "/patient/sos-logs")
 api.add_resource(PatientSymptomCheckResource, "/patient/symptom-checks")
 api.add_resource(DoctorTelemedicineResource, "/doctor/telemedicine")
@@ -2488,11 +2733,15 @@ api.add_resource(AdminAdmissionResource, "/admin/admissions")
 api.add_resource(AdminAdmissionItemResource, "/admin/admissions/<int:admission_id>")
 api.add_resource(AdminBillingResource, "/admin/billing")
 api.add_resource(AdminBillingItemResource, "/admin/billing/<int:bill_id>")
-api.add_resource(RoomListResource, "/admin/rooms")
 api.add_resource(AdmissionResource, "/admin/admissions")
 api.add_resource(BillingResource, "/admin/billing")
 api.add_resource(DepartmentResource, "/admin/departments")
-
-api.add_resource(AnalyticsResource, "/admin/analytics")
+api.add_resource(EmergencyMonitorAPI, "/admin/emergency-monitor")
 api.add_resource(ReportsResource, "/admin/reports")
 api.add_resource(DashboardStatsResource, "/admin/dashboard-stats")
+api.add_resource(AdminDoctors, "/admin/doctors")
+api.add_resource(PatientListResource, "/patients")
+api.add_resource(PatientResource, "/patients/<int:id>")
+api.add_resource(AdminAnalyticsResource, '/admin/analytics')
+api.add_resource(RoomListResource, "/api/rooms")
+api.add_resource(RoomResource, "/api/rooms/<int:id>")

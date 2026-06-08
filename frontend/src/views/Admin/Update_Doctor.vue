@@ -1,258 +1,221 @@
 <template>
-  <div class="container mt-4">
-    <!-- HEADER -->
-    <div class="d-flex justify-content-between align-items-center bg-white p-3 rounded shadow">
-      <div>
-        <img src="@/assets/logo.png" height="60" />
+  <div class="page">
+
+    <!-- HEADER (Dashboard style) -->
+    <div class="header d-flex justify-content-between align-items-center">
+      <h2>🩺 Vardha Hospital - Update Doctor</h2>
+
+      <div class="d-flex gap-2">
+        <button class="btn btn-success">+ Add Doctor</button>
+        <button class="btn btn-danger" @click="logout">Logout</button>
       </div>
-
-      <h2 class="text-center m-0">Vardha Hospital - Update Doctor</h2>
-
-      <button class="btn btn-danger" @click="logout">Logout</button>
     </div>
 
-    <marquee style="background-color: black; color: white">
-      Updating doctor information — keeping our team records current and accurate.
-    </marquee>
+    <!-- STATS CARDS -->
+    <div class="stats-container">
+      <div class="stat-card">
+        <h3>1</h3>
+        <p>Total Doctors</p>
+      </div>
 
-    <!-- FORM -->
-    <div class="card mt-4 shadow p-4">
+      <div class="stat-card">
+        <h3>1</h3>
+        <p>Active Doctors</p>
+      </div>
+
+      <div class="stat-card">
+        <h3>1</h3>
+        <p>Departments</p>
+      </div>
+    </div>
+
+    <!-- FORM CARD -->
+    <div class="form-card">
+
       <div v-if="message" :class="'alert alert-' + alertType">
         {{ message }}
       </div>
 
-      <form @submit.prevent="updateDoctor" v-if="form">
-        <div class="row">
-          <div class="col-md-6 mb-3">
-            <label>Department Name</label>
-            <input v-model="form.deptname" type="text" class="form-control" required />
-          </div>
+      <form v-if="form" @submit.prevent="updateDoctor">
 
-          <div class="col-md-6 mb-3">
-            <label>Description</label>
-            <input v-model="form.deptdes" type="text" class="form-control" required />
-          </div>
-
-          <div class="col-md-6 mb-3">
-            <label>First Name</label>
-            <input v-model="form.fn" type="text" class="form-control" required />
-          </div>
-
-          <div class="col-md-6 mb-3">
-            <label>Last Name</label>
-            <input v-model="form.ln" type="text" class="form-control" required />
-          </div>
-
-          <div class="col-md-6 mb-3">
-            <label>Age</label>
-            <input v-model.number="form.age" type="number" class="form-control" required />
-          </div>
-
-          <div class="col-md-6 mb-3">
-            <label>Contact</label>
-            <input v-model="form.contact" type="text" class="form-control" required />
-          </div>
-
-          <div class="col-md-6 mb-3">
-            <label>Experience (Years)</label>
-            <input v-model.number="form.exp" type="number" class="form-control" required />
-          </div>
+        <div class="grid">
+          <input v-model="form.deptname" placeholder="Department Name" required />
+          <input v-model="form.deptdes" placeholder="Description" required />
+          <input v-model="form.fn" placeholder="First Name" required />
+          <input v-model="form.ln" placeholder="Last Name" required />
+          <input v-model.number="form.age" type="number" placeholder="Age" required />
+          <input v-model="form.contact" placeholder="Contact" required />
+          <input v-model.number="form.exp" type="number" placeholder="Experience (Years)" required />
         </div>
 
-        <div class="d-flex gap-2">
-          <button type="submit" class="btn btn-primary flex-grow-1" :disabled="isSubmitting">
+        <div class="actions">
+          <button class="btn btn-primary" :disabled="isSubmitting">
             {{ isSubmitting ? 'Updating...' : 'Update Doctor' }}
           </button>
-          <button type="button" class="btn btn-secondary" @click="goBack">Cancel</button>
+
+          <button type="button" class="btn btn-secondary" @click="goBack">
+            Cancel
+          </button>
         </div>
+
       </form>
 
-      <div v-else class="alert alert-info">Loading doctor information...</div>
+      <div v-else class="loading">
+        Loading doctor information...
+      </div>
+
     </div>
   </div>
 </template>
 
 <script>
-import axios from 'axios'
+import axios from "axios";
 
 export default {
-  name: 'UpdateDoctor',
+  name: "UpdateDoctor",
 
   data() {
     return {
-      message: '',
-      alertType: 'success',
+      message: "",
+      alertType: "success",
       isSubmitting: false,
       doctorId: null,
       form: null,
-    }
+    };
   },
 
   async mounted() {
-    // Get doctor ID from route query params
-    this.doctorId = this.$route.query.id
+    this.doctorId = this.$route.query.id;
 
     if (!this.doctorId) {
-      this.message = 'Doctor ID not found'
-      this.alertType = 'danger'
-      return
+      this.message = "Doctor ID not found";
+      this.alertType = "danger";
+      return;
     }
 
-    const token = localStorage.getItem('access_token')
+    const token = localStorage.getItem("access_token");
 
     try {
-      // Fetch full doctor details from backend
-      const response = await axios.get(`http://127.0.0.1:5000/get_doctor/${this.doctorId}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
+      const res = await axios.get(
+        `http://127.0.0.1:5000/get_doctor/${this.doctorId}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
 
-      const doctor = response.data
+      const d = res.data;
 
-      // Initialize form with existing doctor data
       this.form = {
-        deptname: doctor.deptname || '',
-        deptdes: doctor.deptdes || '',
-        fn: doctor.first_name || '',
-        ln: doctor.last_name || '',
-        age: doctor.age || null,
-        contact: doctor.contact || '',
-        exp: doctor.experience || null,
-      }
-    } catch (error) {
-      console.error('Error fetching doctor details:', error)
-      this.message = error.response?.data?.message || 'Failed to load doctor details'
-      this.alertType = 'danger'
-      this.form = {
-        deptname: '',
-        deptdes: '',
-        fn: '',
-        ln: '',
-        age: null,
-        contact: '',
-        exp: null,
-      }
+        deptname: d.deptname || "",
+        deptdes: d.deptdes || "",
+        fn: d.first_name || "",
+        ln: d.last_name || "",
+        age: d.age || null,
+        contact: d.contact || "",
+        exp: d.experience || null,
+      };
+    } catch (err) {
+      this.message = "Failed to load doctor details";
+      this.alertType = "danger";
     }
   },
 
   methods: {
     async updateDoctor() {
-      const token = localStorage.getItem('access_token')
+      const token = localStorage.getItem("access_token");
 
-      if (!this.form.deptname || !this.form.fn || !this.form.ln) {
-        this.message = 'Please fill all required fields'
-        this.alertType = 'warning'
-        return
-      }
-
-      this.isSubmitting = true
+      this.isSubmitting = true;
 
       try {
-        const response = await axios.put(
+        await axios.put(
           `http://127.0.0.1:5000/update_doctor/${this.doctorId}`,
-          {
-            deptname: this.form.deptname,
-            deptdes: this.form.deptdes,
-            fn: this.form.fn,
-            ln: this.form.ln,
-            age: this.form.age,
-            contact: this.form.contact,
-            exp: this.form.exp,
-          },
-          {
-            headers: { Authorization: `Bearer ${token}` },
-          },
-        )
+          this.form,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
 
-        this.message = response.data.message || 'Doctor updated successfully'
-        this.alertType = 'success'
+        this.message = "Doctor updated successfully!";
+        this.alertType = "success";
 
-        // Redirect back to dashboard after 2 seconds
         setTimeout(() => {
-          this.$router.push('/admin/dashboard')
-        }, 2000)
-      } catch (error) {
-        console.error('Error updating doctor:', error)
-        this.message = error.response?.data?.message || 'Failed to update doctor'
-        this.alertType = 'danger'
+          this.$router.push("/admin/dashboard");
+        }, 1500);
+      } catch (err) {
+        this.message = "Update failed!";
+        this.alertType = "danger";
       } finally {
-        this.isSubmitting = false
+        this.isSubmitting = false;
       }
     },
 
     logout() {
-      localStorage.removeItem('access_token')
-      localStorage.removeItem('token')
-      this.$router.push('/login')
+      localStorage.clear();
+      this.$router.push("/login");
     },
 
     goBack() {
-      this.$router.push('/admin/dashboard')
+      this.$router.push("/admin/dashboard");
     },
   },
-}
+};
 </script>
 
 <style scoped>
-.container {
-  background-color: #f8f9fa;
-  padding-top: 20px;
-  padding-bottom: 20px;
+.page {
+  background: #071a2f;
+  min-height: 100vh;
+  padding: 20px;
+  color: white;
 }
 
-.card {
-  border: 1px solid #dee2e6;
+/* HEADER */
+.header {
+  background: #0b2a4a;
+  padding: 15px 20px;
+  border-radius: 10px;
+}
+
+/* STATS */
+.stats-container {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 15px;
+  margin-top: 20px;
+}
+
+.stat-card {
+  background: #0d355e;
+  padding: 20px;
+  border-radius: 12px;
+  text-align: center;
+}
+
+/* FORM */
+.form-card {
+  margin-top: 25px;
+  background: #0b2a4a;
+  padding: 25px;
+  border-radius: 12px;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 15px;
+}
+
+input {
+  padding: 10px;
   border-radius: 8px;
-  background-color: white;
-}
-
-marquee {
-  margin-top: 10px;
-  padding: 10px;
-  font-size: 14px;
-  font-weight: 500;
-}
-
-.alert {
-  margin-bottom: 20px;
-  border-radius: 4px;
-}
-
-.btn {
-  border-radius: 4px;
-  font-weight: 500;
-  transition: all 0.3s ease;
-}
-
-.btn:hover:not(:disabled) {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
-}
-
-.btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-label {
-  font-weight: 600;
-  color: #333;
-  margin-bottom: 8px;
-}
-
-input.form-control {
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  padding: 10px;
-  font-size: 14px;
-}
-
-input.form-control:focus {
-  border-color: #007bff;
-  box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+  border: none;
   outline: none;
 }
 
-.d-flex.gap-2 {
+/* BUTTONS */
+.actions {
+  margin-top: 20px;
+  display: flex;
   gap: 10px;
+}
+
+.loading {
+  color: #ccc;
 }
 </style>

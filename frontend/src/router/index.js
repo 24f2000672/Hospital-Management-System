@@ -1,18 +1,20 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import HomeView from '../views/HomeView.vue'
+import AdminEditPatient from '../views/Admin/AdminEditPatient.vue'  // ✅ FIXED IMPORT
+import AddRoom from '../views/Admin/AddRoom.vue'  // ✅ FIXED IMPORT
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
 
   routes: [
-    // Home
+    // ================= HOME =================
     {
       path: '/',
       name: 'home',
       component: HomeView,
     },
 
-    // Authentication
+    // ================= AUTH =================
     {
       path: '/login',
       name: 'login',
@@ -24,276 +26,85 @@ const router = createRouter({
       component: () => import('../views/RegisterView.vue'),
     },
 
-    // Patient
+    // ================= PATIENT =================
     {
       path: '/patient/dashboard',
       name: 'patient-dashboard',
       component: () => import('../views/Patient/Dashboard.vue'),
     },
+
     {
       path: '/patient/tabs',
       name: 'patient-tabs',
       component: () => import('../views/Patient/MobileTabsView.vue'),
     },
-    {
-      path: '/patient/profile',
-      name: 'patient-profile',
-      component: () => import('../views/Shared/ModuleWorkspace.vue'),
-      meta: {
-        title: 'Patient Profile',
-        moduleKey: 'patient-profile',
-      },
-    },
-    {
-      path: '/patient/medical-records',
-      name: 'patient-medical-records',
-      component: () => import('../views/Shared/ModuleWorkspace.vue'),
-      meta: {
-        title: 'Medical Records',
-        moduleKey: 'medical-records',
-      },
-    },
-    {
-      path: '/patient/reports',
-      name: 'patient-reports',
-      component: () => import('../views/Shared/ModuleWorkspace.vue'),
-      meta: {
-        title: 'Health Reports',
-        moduleKey: 'reports',
-      },
-    },
-    {
-      path: '/patient/appointment-booking',
-      name: 'patient-appointment-booking',
-      component: () => import('../views/Shared/ModuleWorkspace.vue'),
-      meta: {
-        title: 'Appointment Booking',
-        moduleKey: 'appointment-booking',
-      },
-    },
-    {
-      path: '/patient/my-appointments',
-      name: 'patient-my-appointments',
-      component: () => import('../views/Shared/ModuleWorkspace.vue'),
-      meta: {
-        title: 'My Appointments',
-        moduleKey: 'my-appointments',
-      },
-    },
-    {
-      path: '/patient/medicine-reminder',
-      name: 'patient-medicine-reminder',
-      component: () => import('../views/Shared/ModuleWorkspace.vue'),
-      meta: {
-        title: 'Medicine Reminder',
-        moduleKey: 'medicine-reminder',
-      },
-    },
-    {
-      path: '/patient/emergency-sos',
-      name: 'patient-emergency-sos',
-      component: () => import('../views/Shared/ModuleWorkspace.vue'),
-      meta: {
-        title: 'Emergency SOS',
-        moduleKey: 'emergency-sos',
-      },
-    },
-    {
-      path: '/patient/ai-health-assistant',
-      name: 'patient-ai-assistant',
-      component: () => import('../views/Shared/ModuleWorkspace.vue'),
-      meta: {
-        title: 'AI Health Assistant',
-        moduleKey: 'ai-assistant',
-      },
-    },
-    {
-      path: '/patient/accessibility',
-      name: 'patient-accessibility',
-      component: () => import('../views/Shared/ModuleWorkspace.vue'),
-      meta: {
-        title: 'Accessibility',
-        moduleKey: 'accessibility',
-      },
-    },
-    {
-      path: '/patient/health-card',
-      name: 'patient-health-card',
-      component: () => import('../views/Shared/ModuleWorkspace.vue'),
-      meta: {
-        title: 'Health Card',
-        moduleKey: 'health-card',
-      },
-    },
-    {
-      path: '/patient/history/:id',
-      name: 'patient-history',
-      component: () => import('../views/Patient/History.vue'),
-    },
-    {
-      path: '/patient/doctor-profile/:id?',
-      name: 'patient-doctor-profile',
-      component: () => import('../views/Patient/DoctorProfile.vue'),
-    },
+
     {
       path: '/editpatient/:id',
       name: 'patient-edit',
       component: () => import('../views/Patient/EditPatient.vue'),
     },
 
-    // Doctor
-    {
-      path: '/doctor/dashboard',
-      name: 'doctor-dashboard',
-      component: () => import('../views/Doctor/Dashboard.vue'),
-    },
-    {
-      path: '/doctor/patient-history/:id?',
-      name: 'doctor-patient-history',
-      component: () => import('../views/Shared/ModuleWorkspace.vue'),
-      meta: {
-        title: 'Patient History',
-        moduleKey: 'doctor-history',
-      },
-    },
-    {
-      path: '/doctor/manage-slots/:doc_id',
-      name: 'doctor-manage-slots',
-      component: () => import('../views/Doctor/ManageSlots.vue'),
-    },
-    {
-      path: '/doctor/monthly-reports',
-      name: 'doctor-monthly-reports',
-      component: () => import('../views/Shared/ModuleWorkspace.vue'),
-      meta: {
-        title: 'Monthly Reports',
-        moduleKey: 'monthly-reports',
-      },
-    },
-    {
-      path: '/doctor/telemedicine',
-      name: 'doctor-telemedicine',
-      component: () => import('../views/Shared/ModuleWorkspace.vue'),
-      meta: {
-        title: 'Telemedicine',
-        moduleKey: 'telemedicine',
-      },
-    },
-    {
-      path: '/doctor/treatment/:id',
-      name: 'doctor-treatment',
-      component: () => import('../views/Doctor/AddTreatment.vue'),
-    },
-
-    // Admin
+    // ================= ADMIN =================
     {
       path: '/admin/dashboard',
       name: 'admin-dashboard',
       component: () => import('../views/Admin/Dashboard.vue'),
     },
-    {
-      path: '/admin/manage-doctors',
-      name: 'admin-manage-doctors',
-      component: () => import('../views/Shared/ModuleWorkspace.vue'),
-      meta: {
-        title: 'Manage Doctors',
-        moduleKey: 'manage-doctors',
-      },
-    },
-    {
-      path: '/admin/manage-patients',
-      name: 'admin-manage-patients',
-      component: () => import('../views/Shared/ModuleWorkspace.vue'),
-      meta: {
-        title: 'Manage Patients',
-        moduleKey: 'manage-patients',
-      },
-    },
+
     {
       path: '/admin/departments',
       name: 'admin-departments',
-      component: () => import('../views/Shared/ModuleWorkspace.vue'),
-      meta: {
-        title: 'Departments',
-        moduleKey: 'departments',
-      },
+      component: () => import('../views/Admin/Departments.vue'),
     },
     {
       path: '/admin/analytics',
       name: 'admin-analytics',
-      component: () => import('../views/Shared/ModuleWorkspace.vue'),
-      meta: {
-        title: 'Analytics',
-        moduleKey: 'analytics',
-      },
-    },
-    {
-      path: '/admin/emergency-monitor',
-      name: 'admin-emergency-monitor',
-      component: () => import('../views/Shared/ModuleWorkspace.vue'),
-      meta: {
-        title: 'Emergency Monitor',
-        moduleKey: 'emergency-monitor',
-      },
-    },
-    {
-      path: '/admin/rooms',
-      name: 'admin-rooms',
-      component: () => import('../views/Shared/HospitalManagementWorkspace.vue'),
-      meta: {
-        title: 'Rooms',
-        moduleKey: 'rooms',
-      },
-    },
-    {
-      path: '/admin/admissions',
-      name: 'admin-admissions',
-      component: () => import('../views/Shared/HospitalManagementWorkspace.vue'),
-      meta: {
-        title: 'Admissions',
-        moduleKey: 'admissions',
-      },
+      component: () => import('../views/Admin/Analytics.vue'),
     },
     {
       path: '/admin/billing',
       name: 'admin-billing',
-      component: () => import('../views/Shared/HospitalManagementWorkspace.vue'),
-      meta: {
-        title: 'Billing',
-        moduleKey: 'billing',
-      },
+      component: () => import('../views/Admin/Billings.vue'),
     },
     {
-      path: '/admin/doctors',
-      name: 'admin-doctors',
-      component: () => import('../views/Admin/Add_Doctor.vue'),
+      path: '/admin/rooms',
+      name: 'admin-rooms',
+      component: () => import('../views/Admin/Rooms.vue'),
     },
     {
-      path: '/admin/update-doctor',
-      name: 'admin-update-doctor',
-      component: () => import('../views/Admin/Update_Doctor.vue'),
+      path: '/admin/add-room',
+      name: 'admin-add-room',
+      component: () => import('../views/Admin/AddRoom.vue'),
     },
+
     {
-      path: '/admin/patients',
-      name: 'admin-patients',
+      path: '/admin/manage-patients',
+      name: 'admin-manage-patients',
       component: () => import('../views/Admin/PatientsManagement.vue'),
     },
+
+    // ✅ EDIT PATIENT (FIXED)
     {
-      path: '/admin/update-patient',
-      name: 'admin-update-patient',
-      component: () => import('../views/Admin/Update_Patient.vue'),
+      path: '/admin/patients/edit/:id',
+      name: 'admin-edit-patient',
+      component: AdminEditPatient,
+      props: true,
     },
+
+    {
+      path: '/admin/manage-doctors',
+      name: 'admin-manage-doctors',
+      component: () => import('../views/Admin/DoctorsManagement.vue'),
+    },
+
     {
       path: '/admin/appointments',
       name: 'admin-appointments',
       component: () => import('../views/Admin/Appointments.vue'),
     },
-    {
-      path: '/admin/search',
-      name: 'admin-search',
-      component: () => import('../views/Admin/Admin_Search.vue'),
-    },
 
+    // ================= FALLBACK =================
     {
       path: '/:pathMatch(.*)*',
       name: 'not-found',

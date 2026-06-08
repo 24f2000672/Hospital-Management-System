@@ -4,7 +4,12 @@
 
       <div class="page-header mb-4">
         <h2>🏥 Departments Management</h2>
-
+        <button
+      class="btn btn-secondary"
+      @click="goDashboard"
+    >
+      🏠 Dashboard
+    </button>
         <button class="btn btn-success" @click="addDepartment">
           ➕ Add Department
         </button>
@@ -113,7 +118,9 @@ export default {
         `/admin/edit-department/${dept.id}`
       );
     },
-
+    goDashboard() {
+      this.$router.push("/admin/dashboard");
+    },  
     async deleteDepartment(id) {
       if (!confirm("Delete this department?")) return;
 

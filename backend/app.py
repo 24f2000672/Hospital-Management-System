@@ -22,9 +22,9 @@ def create_app():
 
 # Create Flask App
 app = create_app()
+from flask_migrate import Migrate
 
-# Database Initialization
-models.db.init_app(app)
+
 
 # JWT
 jwt = JWTManager(app)
@@ -54,8 +54,11 @@ CORS(
 from routes import api
 
 api.init_app(app)
+from models import db
 
-
+migrate = Migrate(app, db)
+# Database Initialization
+models.db.init_app(app)
 def create_admin():
     """
     Create default admin if not exists

@@ -1,71 +1,134 @@
 <template>
   <div class="login-page">
-    
-    <header class="navbar bg-white d-flex align-items-center justify-content-between px-4">
-      <div>
-        <img src="@/assets/logo.png" height="80" width="80" alt="Logo" />
+    <!-- Header -->
+    <header class="landing-topbar container-fluid px-4 px-lg-5 py-3">
+      <div class="brand-lockup">
+        <img src="@/assets/logo.png" alt="Logo" class="brand-mark" />
+        <div>
+          <p class="eyebrow mb-1">HEALTH GUARDIAN+</p>
+          <h1 class="brand-title mb-0">
+            Smart healthcare, emergency response, and accessibility
+          </h1>
+        </div>
       </div>
 
-      <div class="text-center">
-        <h1>Vardha Hospital</h1>
-      </div>
-
-      <nav class="d-flex gap-3 flex-wrap">
-        <button class="btn" :class="selectedRole === 'patient' ? 'btn-success' : 'btn-outline-success'" @click="selectedRole = 'patient'">
-          Patient Login
-        </button>
-        <button class="btn" :class="selectedRole === 'doctor' ? 'btn-secondary' : 'btn-outline-secondary'" @click="selectedRole = 'doctor'">
-          Doctor Login
-        </button>
-        <button class="btn" :class="selectedRole === 'admin' ? 'btn-primary' : 'btn-outline-primary'" @click="selectedRole = 'admin'">
-          Admin Login
-        </button>
-      </nav>
+      <router-link to="/" class="btn btn-outline-light btn-lg">
+        Home
+      </router-link>
     </header>
 
-    
-    <div class="scroll-container">
-      <div class="scroll-text">Your health journey begins here — log in to care for yourself</div>
+    <!-- Banner -->
+    <div class="banner">
+      <span>
+        Your health journey begins here — Login to access appointments,
+        medical records, SOS alerts and healthcare services.
+      </span>
     </div>
 
-    
-    <div class="container mt-5">
-      <div class="card shadow p-4 mx-auto login-card">
-        <h2 class="text-center mb-2">{{ roleTitle }} Login</h2>
-        <p class="text-center text-muted mb-4">Choose a role, then sign in to the correct dashboard.</p>
+    <!-- Login Section -->
+    <main class="container py-5">
+      <div class="row justify-content-center">
+        <div class="col-lg-5">
 
-        <form @submit.prevent="loginUser">
-          <input
-            v-model="form.email"
-            type="email"
-            class="form-control mb-3"
-            placeholder="Enter Your Email"
-            required
-          />
+          <div class="glass-card">
 
-          <input
-            v-model="form.password"
-            type="password"
-            class="form-control mb-3"
-            placeholder="Enter Your Password"
-            required
-          />
+            <span class="hero-pill mb-3">
+              Secure Authentication
+            </span>
 
-          <button type="submit" class="btn btn-primary w-100">Login</button>
-        </form>
+            <h2 class="login-title">
+              {{ roleTitle }} Login
+            </h2>
 
-        
-        <div v-if="errorMessage" class="alert alert-danger mt-3">
-          {{ errorMessage }}
-        </div>
+            <p class="login-subtitle">
+              Choose your role and sign in to continue.
+            </p>
 
-        
-        <div class="mt-3 text-center">
-          <span>Don't have an account?</span>
-          <router-link to="/register" class="ms-2">Sign Up</router-link>
+            <!-- Role Selection -->
+            <div class="role-buttons">
+              <button
+                class="btn"
+                :class="selectedRole === 'patient'
+                  ? 'btn-primary'
+                  : 'btn-outline-light'"
+                @click="selectedRole='patient'"
+              >
+                Patient
+              </button>
+
+              <button
+                class="btn"
+                :class="selectedRole === 'doctor'
+                  ? 'btn-primary'
+                  : 'btn-outline-light'"
+                @click="selectedRole='doctor'"
+              >
+                Doctor
+              </button>
+
+              <button
+                class="btn"
+                :class="selectedRole === 'admin'
+                  ? 'btn-primary'
+                  : 'btn-outline-light'"
+                @click="selectedRole='admin'"
+              >
+                Admin
+              </button>
+            </div>
+
+            <form @submit.prevent="loginUser">
+
+              <input
+                v-model="form.email"
+                type="email"
+                class="form-control glass-input"
+                placeholder="Enter Email"
+                required
+              />
+
+              <input
+                v-model="form.password"
+                type="password"
+                class="form-control glass-input mt-3"
+                placeholder="Enter Password"
+                required
+              />
+
+              <button
+                type="submit"
+                class="btn btn-primary btn-lg w-100 mt-4"
+              >
+                Login
+              </button>
+
+            </form>
+
+            <div
+              v-if="errorMessage"
+              class="alert alert-danger mt-3"
+            >
+              {{ errorMessage }}
+            </div>
+
+            <div class="text-center mt-4">
+              <span class="text-light">
+                Don't have an account?
+              </span>
+
+              <router-link
+                to="/register"
+                class="text-info ms-2"
+              >
+                Register Here
+              </router-link>
+            </div>
+
+          </div>
+
         </div>
       </div>
-    </div>
+    </main>
   </div>
 </template>
 
@@ -88,7 +151,10 @@ export default {
 
   computed: {
     roleTitle() {
-      return this.selectedRole.charAt(0).toUpperCase() + this.selectedRole.slice(1)
+      return (
+        this.selectedRole.charAt(0).toUpperCase() +
+        this.selectedRole.slice(1)
+      )
     },
   },
 
@@ -97,73 +163,157 @@ export default {
       this.errorMessage = ''
 
       try {
-        const res = await axios.post('http://127.0.0.1:5000/login', this.form)
+        const res = await axios.post(
+          'http://127.0.0.1:5000/login',
+          this.form,
+        )
 
-        console.log('LOGIN RESPONSE:', res.data)
+        localStorage.setItem(
+          'access_token',
+          res.data.access_token,
+        )
 
-        // Save JWT token
-        localStorage.setItem('access_token', res.data.access_token)
-        localStorage.setItem('user_role', String(res.data.role || ''))
+        localStorage.setItem(
+          'user_role',
+          String(res.data.role || ''),
+        )
 
-        alert(res.data.message)
-
-        // Role-based redirects
         if (res.data.role === 1) {
-          this.$router.push({ path: '/admin/dashboard' })
+          this.$router.push('/admin/dashboard')
         } else if (res.data.role === 2) {
-          this.$router.push({ path: '/doctor/dashboard' })
+          this.$router.push('/doctor/dashboard')
         } else if (res.data.role === 3) {
-          this.$router.push({ path: '/patient/dashboard' })
-        } else {
-          // fallback to login
-          this.$router.push({ path: '/login' })
+          this.$router.push('/patient/dashboard')
         }
       } catch (error) {
-        if (error.response) {
-          const status = error.response.status
-          if (status === 401) {
-            alert('Incorrect password. Please try again.')
-          } else if (status === 404) {
-            alert('User not found. Please Sign Up.')
-            this.$router.push({ path: '/register' })
-          } else {
-            this.errorMessage = error.response.data.message || 'Login failed'
-          }
-        } else {
-          this.errorMessage = 'Server not reachable'
-        }
+        this.errorMessage =
+          error.response?.data?.message ||
+          'Login Failed'
       }
     },
   },
 }
 </script>
 
-<style>
+<style scoped>
+.login-page {
+  min-height: 100vh;
+  color: #f4fbff;
 
-/* SCROLL BANNER */
-.scroll-container {
-  background: black;
+  background:
+    radial-gradient(
+      circle at top left,
+      rgba(45,212,191,0.24),
+      transparent 28%
+    ),
+    radial-gradient(
+      circle at top right,
+      rgba(249,115,22,0.25),
+      transparent 28%
+    ),
+    linear-gradient(
+      160deg,
+      #08111f 0%,
+      #0f2a3b 48%,
+      #123b52 100%
+    );
+}
+
+.banner {
+  background: rgba(0,0,0,0.35);
   color: white;
-  overflow: hidden;
-  white-space: nowrap;
-}
-.scroll-text {
-  display: inline-block;
-  padding-left: 100%;
-  animation: scroll 12s linear infinite;
-}
-@keyframes scroll {
-  from {
-    transform: translateX(0%);
-  }
-  to {
-    transform: translateX(-100%);
-  }
+  text-align: center;
+  padding: 12px;
+  border-top: 1px solid rgba(255,255,255,0.1);
+  border-bottom: 1px solid rgba(255,255,255,0.1);
 }
 
-/* LOGIN CARD */
-.login-card {
-  max-width: 450px;
-  border-radius: 12px;
+.landing-topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.brand-lockup {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.brand-mark {
+  width: 72px;
+  height: 72px;
+  border-radius: 18px;
+}
+
+.brand-title {
+  font-family: Georgia, serif;
+  font-size: 1.2rem;
+}
+
+.eyebrow {
+  font-size: 0.7rem;
+  letter-spacing: 0.2em;
+  color: rgba(255,255,255,0.7);
+}
+
+.glass-card {
+  backdrop-filter: blur(18px);
+  background: rgba(4,12,20,0.45);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 28px;
+  padding: 2rem;
+  box-shadow: 0 24px 70px rgba(0,0,0,0.25);
+}
+
+.hero-pill {
+  display: inline-block;
+  padding: 8px 16px;
+  border-radius: 999px;
+
+  background: rgba(255,255,255,0.12);
+  border: 1px solid rgba(255,255,255,0.1);
+}
+
+.login-title {
+  font-family: Georgia, serif;
+  font-size: 2.5rem;
+}
+
+.login-subtitle {
+  color: rgba(255,255,255,0.7);
+}
+
+.role-buttons {
+  display: flex;
+  gap: 10px;
+  margin: 20px 0;
+}
+
+.glass-input {
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.15);
+  color: white;
+}
+
+.glass-input::placeholder {
+  color: rgba(255,255,255,0.6);
+}
+
+.glass-input:focus {
+  background: rgba(255,255,255,0.12);
+  color: white;
+  box-shadow: none;
+}
+
+@media (max-width: 768px) {
+  .login-title {
+    font-size: 2rem;
+  }
+
+  .landing-topbar {
+    flex-direction: column;
+    gap: 1rem;
+  }
 }
 </style>

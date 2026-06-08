@@ -1,11 +1,16 @@
 <template>
   <div class="glass-page">
     <div class="container py-4">
-
       <div class="page-header mb-4">
         <h2>📈 Hospital Analytics</h2>
-      </div>
-
+      
+      <button
+      class="btn btn-secondary"
+      @click="goDashboard"
+    >
+      🏠 Dashboard
+    </button>
+    </div>
       <div class="row">
 
         <div class="col-lg-3 col-md-6 mb-4">
@@ -73,6 +78,7 @@
 import axios from "axios";
 
 export default {
+  // eslint-disable-next-line vue/multi-word-component-names
   name: "Analytics",
 
   data() {
@@ -104,7 +110,7 @@ export default {
             },
           }
         );
-
+        
         this.totalDoctors =
           response.data.total_doctors || 0;
 
@@ -133,6 +139,9 @@ export default {
         );
       }
     },
+    goDashboard() {
+  this.$router.push("/admin/dashboard");
+},
   },
 };
 </script>
@@ -158,7 +167,14 @@ export default {
 }
 
 .page-header {
-  color: white;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.title {
+  margin: 0;
 }
 
 .metric-box {

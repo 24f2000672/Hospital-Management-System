@@ -5,6 +5,8 @@ from datetime import datetime, time
 
 db = SQLAlchemy()
 
+
+
 SLOT_TIME_OBJECTS = {
     "09:00": time(9, 0),
     "10:00": time(10, 0),
@@ -57,7 +59,7 @@ class Doctor(db.Model):
     contact = db.Column(db.String(15))
     experience = db.Column(db.Integer)
     blacklisted = db.Column(db.String(2), default="N")
-
+    phone= db.Column(db.String(20))
     department = db.relationship('Department', backref='doctors')
     appointments = db.relationship('Appointment', backref='doctor')
 
@@ -285,9 +287,17 @@ class ChatMessage(db.Model):
 
 class Room(db.Model):
     id = db.Column(db.Integer, primary_key=True)
+
     room_number = db.Column(db.String(20), unique=True, nullable=False)
+
     type = db.Column(db.String(50), nullable=False)
+
+    capacity = db.Column(db.Integer, default=1)
+
+    floor = db.Column(db.Integer, default=0)
+
     status = db.Column(db.String(20), default='AVAILABLE')
+
     notes = db.Column(db.String(255))
 
 

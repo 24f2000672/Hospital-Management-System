@@ -1,7 +1,15 @@
 <template>
   <div class="glass-page">
     <div class="container py-4">
-      <h2 class="page-title">💳 Billing Management</h2>
+      <div class="page-header">
+        <h2 class="page-title">💳 Billing Management</h2>
+        <button
+      class="btn btn-secondary"
+      @click="goDashboard"
+    >
+      🏠 Dashboard
+    </button>
+      </div>
 
       <div class="table-responsive">
         <table class="table table-dark table-hover align-middle">
@@ -77,6 +85,11 @@ export default {
       alert('Failed to load billing records')
     }
   },
+  methods: {
+    goDashboard() {
+      this.$router.push("/admin/dashboard");
+    }
+  }
 }
 </script>
 
@@ -108,5 +121,15 @@ export default {
 .table {
   border-radius: 15px;
   overflow: hidden;
+}
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.title {
+  margin: 0;
 }
 </style>
