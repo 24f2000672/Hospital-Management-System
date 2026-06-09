@@ -4,7 +4,12 @@
     <!-- HEADER -->
     <div class="d-flex justify-content-between align-items-center mb-3">
       <h2 class="page-title">🛏 Room Management</h2>
-
+      <button
+      class="btn btn-secondary"
+      @click="goDashboard"
+    >
+      🏠 Dashboard
+    </button>
       <button class="btn btn-success" @click="goToAddRoom">
         ➕ Add Room
       </button>
@@ -37,11 +42,12 @@
     </div>
 
     <!-- SEARCH -->
-    <input
-      v-model="search"
-      class="form-control mb-3"
-      placeholder="🔍 Search room number or type..."
-    />
+      <input
+  v-model="search"
+  type="text"
+  class="form-control mb-3"
+  placeholder="🔍 Search room number, type, status..."
+/>
 
     <!-- LOADING -->
     <div v-if="loading" class="text-white text-center">
@@ -49,30 +55,55 @@
     </div>
 
     <!-- ROOMS GRID -->
-    <div v-else class="row g-4">
+  <div v-else class="row g-4">
 
-      <div
-        v-for="room in filteredRooms"
-        :key="room.id"
-        class="col-lg-3 col-md-4 col-sm-6"
+  <div
+    v-for="room in filteredRooms"
+    :key="room.id"
+    class="col-lg-3 col-md-4 col-sm-6"
+  >
+    <div class="room-card">
+
+      <h4>Room {{ room.room_number }}</h4>
+
+      <p class="room-type">{{ room.type }}</p>
+
+      <p>Capacity: {{ room.capacity }}</p>
+
+      <p>Floor: {{ room.floor }}</p>
+
+      <span
+        class="badge"
+        :class="{
+          'bg-success': room.status === 'AVAILABLE',
+          'bg-danger': room.status === 'OCCUPIED',
+          'bg-warning text-dark': room.status === 'MAINTENANCE'
+        }"
       >
-        <div class="room-card">
+        {{ room.status }}
+      </span>
 
-          <h4>Room {{ room.room_number }}</h4>
+      <div class="mt-3 d-flex gap-2 justify-content-center">
+        <button
+          class="btn btn-warning btn-sm"
+          @click="editRoom(room.id)"
+        >
+          ✏ Edit
+        </button>
 
-          <p class="room-type">{{ room.type }}</p>
-
-          <span
-            class="badge"
-            :class="room.status === 'AVAILABLE' ? 'bg-success' : 'bg-danger'"
-          >
-            {{ room.status }}
-          </span>
-
-        </div>
+        <button
+          class="btn btn-danger btn-sm"
+          @click="deleteRoom(room.id, room.room_number)"
+        >
+          🗑 Delete
+        </button>
       </div>
 
     </div>
+  </div>
+
+</div>
+</div>
 
     <div v-if="!loading && filteredRooms.length === 0" class="text-center mt-4 text-white">
       No rooms found
@@ -115,7 +146,7 @@
 
     </div>
 
-  </div>
+  
 </template>
 
 <script>
@@ -140,12 +171,50 @@ export default {
   },
 
   computed: {
-    filteredRooms() {
-      return this.rooms.filter(r =>
-        (r.room_number + "").toLowerCase().includes(this.search.toLowerCase()) ||
-        (r.type || "").toLowerCase().includes(this.search.toLowerCase())
+  filteredRooms() {
+
+    if (!this.search) {
+      return this.rooms;
+    }
+
+    const searchText = this.search
+      .toString()
+      .toLowerCase()
+      .trim();
+
+    return this.rooms.filter(room => {
+
+      return (
+        String(room.room_number || "")
+          .toLowerCase()
+          .includes(searchText)
+
+        ||
+
+        String(room.type || "")
+          .toLowerCase()
+          .includes(searchText)
+
+        ||
+
+        String(room.status || "")
+          .toLowerCase()
+          .includes(searchText)
+
+        ||
+
+        String(room.floor || "")
+          .includes(searchText)
+
+        ||
+
+        String(room.capacity || "")
+          .includes(searchText)
       );
-    },
+
+    });
+  }
+},
 
     availableCount() {
       return this.rooms.filter(r => r.status === "AVAILABLE").length;
@@ -153,8 +222,8 @@ export default {
 
     occupiedCount() {
       return this.rooms.filter(r => r.status === "OCCUPIED").length;
-    }
-  },
+    },
+  
 
   async mounted() {
     await this.loadRooms();
@@ -186,7 +255,47 @@ export default {
         this.loading = false;
       }
     },
+    editRoom(id) {
+  console.log("Edit Room:", id);
 
+  this.$router.push(`/admin/rooms/edit/${id}`);
+},
+async deleteRoom(id, roomNumber) {
+
+  if (!confirm(`Delete Room ${roomNumber}?`)) {
+    return;
+  }
+
+  try {
+
+    const token = localStorage.getItem("access_token");
+
+    await axios.delete(
+      `http://127.0.0.1:5000/api/rooms/${id}`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      }
+    );
+
+    alert("Room deleted successfully");
+
+    await this.loadRooms();
+
+  } catch (err) {
+
+    console.error(
+      "DELETE ROOM ERROR:",
+      err.response?.data || err.message
+    );
+
+    alert("Failed to delete room");
+  }
+},
+goDashboard() {
+  this.$router.push("/admin/dashboard");
+},
     // ---------------- ADD ROOM ----------------
     async addRoom() {
       try {

@@ -194,7 +194,19 @@ def _patient_record_for_user(current_user):
 
 def _doctor_record_for_user(current_user):
     return Doctor.query.filter_by(email=current_user.email).first()
+def parse_date(value):
+    if not value:
+        return None
 
+    try:
+        # full datetime format
+        return datetime.strptime(value, "%Y-%m-%d %H:%M:%S")
+    except ValueError:
+        try:
+            # date-only format
+            return datetime.strptime(value, "%Y-%m-%d")
+        except ValueError:
+            return None
 
 def _parse_iso_datetime(value):
     if isinstance(value, datetime):
@@ -2506,25 +2518,19 @@ class PatientListResource(Resource):
 
     @jwt_required()
     def get(self):
-        try:
-            patients = Patient.query.all()
 
-            return [
-                {
-                    "id": p.id,
-                    "first_name": p.first_name,
-                    "last_name": p.last_name,
-                    "age": p.age,
-                    "gender": p.gender,
-                    "phone": p.phone
-                }
-                for p in patients
-            ], 200
+        patients = Patient.query.all()
 
-        except Exception as e:
-            print("PATIENT LIST ERROR:", e)
-            return {"message": "Server error"}, 500
-
+        return [
+            {
+                "id": p.id,
+                "name": f"{p.first_name} {p.last_name}",
+                "age": p.age,
+                "gender": p.gender,
+                "phone": p.phone
+            }
+            for p in patients
+        ], 200
 
 class PatientResource(Resource):
 
@@ -2630,62 +2636,185 @@ class RoomResource(Resource):
         }, 200
 
     # ---------------- UPDATE ROOM ----------------
-@jwt_required()
-def put(self, id):
-    try:
-        room = Room.query.get(id)
+    @jwt_required()
+    def put(self, id):
+        try:
+            room = Room.query.get(id)
 
-        if not room:
-            return {"message": "Room not found"}, 404
+            if not room:
+                return {"message": "Room not found"}, 404
 
-        data = request.get_json() or {}
+            data = request.get_json() or {}
 
-        room.room_number = data.get("room_number", room.room_number)
-        room.type = data.get("type", room.type)
-        room.capacity = data.get("capacity", room.capacity)
-        room.floor = data.get("floor", room.floor)
-        room.status = data.get("status", room.status)
+            room.room_number = data.get("room_number", room.room_number)
+            room.type = data.get("type", room.type)
+            room.capacity = data.get("capacity", room.capacity)
+            room.floor = data.get("floor", room.floor)
+            room.status = data.get("status", room.status)
 
-        db.session.commit()
+            db.session.commit()
 
-        return {
-            "message": "Room updated successfully",
-            "room": {
-                "id": room.id,
-                "room_number": room.room_number,
-                "type": room.type,
-                "capacity": room.capacity,
-                "floor": room.floor,
-                "status": room.status
+            return {
+                "message": "Room updated successfully",
+                "room": {
+                    "id": room.id,
+                    "room_number": room.room_number,
+                    "type": room.type,
+                    "capacity": room.capacity,
+                    "floor": room.floor,
+                    "status": room.status
+                }
+            }, 200
+
+        except Exception as e:
+            db.session.rollback()
+            print("UPDATE ROOM ERROR:", e)
+            return {"message": "Server error"}, 500
+
+
+    # ---------------- DELETE ROOM ----------------
+    @jwt_required()
+    def delete(self, id):
+        try:
+            room = Room.query.get(id)
+
+            if not room:
+                return {"message": "Room not found"}, 404
+
+            db.session.delete(room)
+            db.session.commit()
+
+            return {
+                "message": "Room deleted successfully"
+            }, 200
+
+        except Exception as e:
+            db.session.rollback()
+            print("DELETE ROOM ERROR:", e)
+            return {"message": "Server error"}, 500
+class AdmissionListResource(Resource):
+
+    @jwt_required()
+    def get(self):
+
+        admissions = Admission.query.all()
+
+        return [
+            {
+                "id": a.id,
+                "patient_id": a.patient_id,
+                "patient_name": a.patient.first_name + " " + a.patient.last_name,
+                "room_id": a.room_id,
+                "room_number": a.room.room_number,
+                "admission_date": str(a.admission_date),
+                "discharge_date": str(a.discharge_date) if a.discharge_date else None,
+                "status": a.status
             }
-        }, 200
+            for a in admissions
+        ], 200
 
-    except Exception as e:
-        db.session.rollback()
-        print("UPDATE ROOM ERROR:", e)
-        return {"message": "Server error"}, 500
+    @jwt_required()
+    def post(self):
 
+        data = request.get_json()
 
-# ---------------- DELETE ROOM ----------------
-@jwt_required()
-def delete(self, id):
-    try:
-        room = Room.query.get(id)
+        # convert admission date
+        admission_date = None
+        if data.get("admission_date"):
+            admission_date = parse_date(data.get("admission_date"))
+        admission = Admission(
+            patient_id=data["patient_id"],
+            room_id=data["room_id"],
+            admission_date=admission_date,
+            status=data.get("status", "ADMITTED")
+        )
 
-        if not room:
-            return {"message": "Room not found"}, 404
+        # mark room occupied
+        room = Room.query.get(data["room_id"])
+        if room:
+            room.status = "OCCUPIED"
 
-        db.session.delete(room)
+        db.session.add(admission)
         db.session.commit()
 
+        return {"message": "Admission created successfully"}, 201
+
+
+# =========================
+# GET + UPDATE + DELETE
+# =========================
+class AdmissionResource(Resource):
+
+    @jwt_required()
+    def get(self, id):
+
+        admission = Admission.query.get(id)
+
+        if not admission:
+            return {"message": "Admission not found"}, 404
+
         return {
-            "message": "Room deleted successfully"
+            "id": admission.id,
+            "patient_id": admission.patient_id,
+            "room_id": admission.room_id,
+            "admission_date": str(admission.admission_date) if admission.admission_date else None,
+            "discharge_date": str(admission.discharge_date) if admission.discharge_date else None,
+            "status": admission.status
         }, 200
 
-    except Exception as e:
-        db.session.rollback()
-        print("DELETE ROOM ERROR:", e)
-        return {"message": "Server error"}, 500
+    # ================= UPDATE =================
+    @jwt_required()
+    def put(self, id):
+
+        admission = Admission.query.get(id)
+
+        if not admission:
+            return {"message": "Admission not found"}, 404
+
+        data = request.get_json()
+
+        admission.patient_id = data.get("patient_id", admission.patient_id)
+        admission.room_id = data.get("room_id", admission.room_id)
+
+        # admission date fix
+        if data.get("admission_date"):
+            admission.admission_date = parse_date(data.get("admission_date"))
+
+        admission.status = data.get("status", admission.status)
+
+        # 🔥 AUTO SET DISCHARGE DATE
+        if admission.status == "DISCHARGED" and not admission.discharge_date:
+            admission.discharge_date = datetime.utcnow()
+
+        # 🔥 FREE ROOM WHEN DISCHARGED
+        if admission.status == "DISCHARGED":
+            room = Room.query.get(admission.room_id)
+            if room:
+                room.status = "AVAILABLE"
+
+        db.session.commit()
+
+        return {"message": "Admission updated successfully"}, 200
+
+    # ================= DELETE =================
+    @jwt_required()
+    def delete(self, id):
+
+        admission = Admission.query.get(id)
+
+        if not admission:
+            return {"message": "Admission not found"}, 404
+
+        # free room
+        room = Room.query.get(admission.room_id)
+        if room:
+            room.status = "AVAILABLE"
+
+        db.session.delete(admission)
+        db.session.commit()
+
+        return {"message": "Admission deleted successfully"}, 200
+
 
 # all Api Routes
 api.add_resource(AdminDashboard, "/admin/dashboard")
@@ -2729,19 +2858,18 @@ api.add_resource(PatientSymptomCheckResource, "/patient/symptom-checks")
 api.add_resource(DoctorTelemedicineResource, "/doctor/telemedicine")
 api.add_resource(AdminRoomResource, "/admin/rooms")
 api.add_resource(AdminRoomItemResource, "/admin/rooms/<int:room_id>")
-api.add_resource(AdminAdmissionResource, "/admin/admissions")
-api.add_resource(AdminAdmissionItemResource, "/admin/admissions/<int:admission_id>")
-api.add_resource(AdminBillingResource, "/admin/billing")
-api.add_resource(AdminBillingItemResource, "/admin/billing/<int:bill_id>")
-api.add_resource(AdmissionResource, "/admin/admissions")
-api.add_resource(BillingResource, "/admin/billing")
-api.add_resource(DepartmentResource, "/admin/departments")
-api.add_resource(EmergencyMonitorAPI, "/admin/emergency-monitor")
-api.add_resource(ReportsResource, "/admin/reports")
-api.add_resource(DashboardStatsResource, "/admin/dashboard-stats")
-api.add_resource(AdminDoctors, "/admin/doctors")
-api.add_resource(PatientListResource, "/patients")
-api.add_resource(PatientResource, "/patients/<int:id>")
+api.add_resource(AdmissionListResource, "/api/admissions")
+api.add_resource(AdmissionResource, "/api/admissions/<int:id>")
+api.add_resource(AdminBillingResource, "/api/admin/billing")
+api.add_resource(AdminBillingItemResource, "/api/admin/billing/<int:bill_id>")
+api.add_resource(BillingResource, "/api/billing")
+api.add_resource(DepartmentResource, "/api/admin/departments")
+api.add_resource(EmergencyMonitorAPI, "/api/admin/emergency-monitor")
+api.add_resource(ReportsResource, "/api/admin/reports")
+api.add_resource(DashboardStatsResource, "/api/admin/dashboard-stats")
+api.add_resource(AdminDoctors, "/api/admin/doctors")
+api.add_resource(PatientListResource, "/api/patients")
+api.add_resource(PatientResource, "/api/patients/<int:id>")
 api.add_resource(AdminAnalyticsResource, '/admin/analytics')
 api.add_resource(RoomListResource, "/api/rooms")
 api.add_resource(RoomResource, "/api/rooms/<int:id>")

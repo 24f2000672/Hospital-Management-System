@@ -68,6 +68,23 @@ const router = createRouter({
       component: () => import('../views/Admin/Billings.vue'),
     },
     {
+      path: '/admin/admissions',
+      name: 'admin-admissions',
+      component: () => import('../views/Admin/Admission.vue'),
+    },
+    {
+      path: '/admin/add-admission',
+      name: 'admin-add-admission',
+      component: () => import('../views/Admin/AddAdmission.vue')
+    },
+
+    {
+      path: '/admin/admissions/edit/:id',
+      name: 'admin-edit-admission',
+      component: () => import('../views/Admin/EditAdmission.vue'),
+      props: true
+    },
+    {
       path: '/admin/rooms',
       name: 'admin-rooms',
       component: () => import('../views/Admin/Rooms.vue'),
@@ -76,6 +93,12 @@ const router = createRouter({
       path: '/admin/add-room',
       name: 'admin-add-room',
       component: () => import('../views/Admin/AddRoom.vue'),
+    },
+    {
+      path: '/admin/rooms/edit/:id',
+      name: 'admin-edit-room',
+      component: () => import('../views/Admin/EditRoom.vue'),
+      props: true,
     },
 
     {
